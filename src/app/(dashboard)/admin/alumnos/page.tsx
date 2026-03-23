@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { formatDateShort } from "@/lib/utils";
 import Link from "next/link";
 import { Plus, Search } from "lucide-react";
+import type { StepProgress } from "@prisma/client";
 
 type AlumnoWithRelations = Awaited<ReturnType<typeof getAlumnos>>[number];
 
@@ -106,11 +107,11 @@ export default async function AlumnosPage() {
               alumnos.map((alumno: AlumnoWithRelations) => {
                 const enrollment = alumno.enrollments[0];
                 const completedSteps = enrollment?.stepProgress.filter(
-                  (s) => s.status === "COMPLETED"
+                  (s: StepProgress) => s.status === "COMPLETED"
                 ).length ?? 0;
                 const totalSteps = 16;
                 const currentStep = enrollment?.stepProgress.find(
-                  (s) => s.status === "IN_PROGRESS"
+                  (s: StepProgress) => s.status === "IN_PROGRESS"
                 );
 
                 return (
