@@ -1,0 +1,378 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  ALUMNO
+  MENTOR
+  SUPERADMIN
+}
+
+enum Program {
+  ACTIVA
+  OPTIMIZA
+  ESCALA
+}
+
+enum SubscriptionType {
+  BECA
+  NORMAL
+  INVITACION
+  EXPEDIENTE_OPTIMIZA
+  MASTER
+}
+
+enum ClinicModel {
+  GURISTA
+  EMPRESARIAL
+  MIXTO
+}
+
+enum StepStatus {
+  LOCKED
+  AVAILABLE
+  IN_PROGRESS
+  PENDING_VALIDATION
+  COMPLETED
+}
+
+enum KnaasMode {
+  ACOMPANANTE
+  ANALISTA
+  GENERADOR
+}
+
+enum AlertType {
+  INACTIVITY
+  KPI_DEVIATION
+  CONCEPTUAL_ERROR
+  COHERENCE
+  BLOCK
+}
+
+enum CohortStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  PENDING
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+// ============================================================
+// USER & AUTH
+// ============================================================
+
+model User {
+  id              String   @id @default(uuid())
+  supabaseAuthId  String   @unique @map("supabase_auth_id")
+  email           String   @unique
+  role            UserRole @default(ALUMNO)
+  firstName       String   @map("first_name")
+  lastName        String   @map("last_name")
+  photo           String?
+  bio             String?
+  phone           String?
+  apiKeyEncrypted String?  @map("api_key_encrypted")
+  stripeCustomerId String? @map("stripe_customer_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  clinics             Clinic[]
+  enrollments         Enrollment[]
+  mentorCohorts       CohortMentor[]
+  sentMessages        Message[]           @relation("MessageSender")
+  receivedMessages    Message[]           @relation("MessageRecipient")
+  uploadedDocuments   CerebroDocument[]
+  validatedOutputs    Output[]            @relation("OutputValidator")
+  mentoringSessions   MentoringAttendee[]
+
+  @@map("users")
+}
+
+// ============================================================
+// CLINIC
+// ============================================================
+
+model Clinic {
+  id         String      @id @default(uuid())
+  userId     String      @map("user_id")
+  name       String
+  address    String?
+  phone      String?
+  email      String?
+  model      ClinicModel?
+  cyclePhase String?     @map("cycle_phase")
+  teamCount  Int         @default(1) @map("team_count")
+  services   Json?       // Array of { name, ticket }
+  channels   String[]    // Captation channels
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kpiSnapshots KpiSnapshot[]
+
+  @@map("clinics")
+}
+
+// ============================================================
+// COHORT & ENROLLMENT
+// ============================================================
+
+model Cohort {
+  id        String       @id @default(uuid())
+  program   Program
+  name      String       // e.g. "ACTIVA-Abril2026"
+  startDate DateTime     @map("start_date")
+  endDate   DateTime?    @map("end_date")
+  status    CohortStatus @default(DRAFT)
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  // Relations
+  enrollments      Enrollment[]
+  mentors          CohortMentor[]
+  mentoringSession MentoringSession[]
+  messages         Message[]
+
+  @@map("cohorts")
+}
+
+model CohortMentor {
+  id       String @id @default(uuid())
+  cohortId String @map("cohort_id")
+  userId   String @map("user_id")
+
+  cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([cohortId, userId])
+  @@map("cohort_mentors")
+}
+
+model Enrollment {
+  id               String           @id @default(uuid())
+  userId           String           @map("user_id")
+  cohortId         String           @map("cohort_id")
+  subscriptionType SubscriptionType @default(NORMAL) @map("subscription_type")
+  paymentMethod    String?          @map("payment_method")
+  stripeSubId      String?          @map("stripe_subscription_id")
+  status           EnrollmentStatus @default(PENDING)
+  enrolledAt       DateTime         @default(now()) @map("enrolled_at")
+
+  // Relations
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cohort               Cohort                @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  stepProgress         StepProgress[]
+  outputs              Output[]
+  conversationSessions ConversationSession[]
+  alerts               Alert[]
+
+  @@unique([userId, cohortId])
+  @@map("enrollments")
+}
+
+// ============================================================
+// PROGRAM PROGRESS
+// ============================================================
+
+model StepProgress {
+  id           String     @id @default(uuid())
+  enrollmentId String     @map("enrollment_id")
+  stepNumber   Int        @map("step_number") // 1-16
+  status       StepStatus @default(LOCKED)
+  saber        Boolean    @default(false)
+  decidir      Boolean    @default(false)
+  hacer        Boolean    @default(false)
+  startedAt    DateTime?  @map("started_at")
+  completedAt  DateTime?  @map("completed_at")
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, stepNumber])
+  @@map("step_progress")
+}
+
+model Output {
+  id                  String   @id @default(uuid())
+  enrollmentId        String   @map("enrollment_id")
+  stepNumber          Int      @map("step_number")
+  outputType          String   @map("output_type") // e.g. "mapa_madurez", "informe_360", "avatar_completo"
+  title               String
+  content             Json     // The actual output content
+  version             Int      @default(1)
+  isSnapshotProtected Boolean  @default(false) @map("is_snapshot_protected")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  validatedAt         DateTime? @map("validated_at")
+  validatedById       String?  @map("validated_by_id")
+
+  enrollment  Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  validatedBy User?      @relation("OutputValidator", fields: [validatedById], references: [id])
+
+  @@map("outputs")
+}
+
+// ============================================================
+// KNAAS - CONVERSATIONS & AI
+// ============================================================
+
+model ConversationSession {
+  id           String    @id @default(uuid())
+  enrollmentId String    @map("enrollment_id")
+  stepNumber   Int       @map("step_number")
+  mode         KnaasMode
+  messages     Json      @default("[]") // Array of { role, content, timestamp }
+  tokensUsed   Int       @default(0) @map("tokens_used")
+  costEstimate Float     @default(0) @map("cost_estimate") // in USD
+  startedAt    DateTime  @default(now()) @map("started_at")
+  endedAt      DateTime? @map("ended_at")
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@map("conversation_sessions")
+}
+
+// ============================================================
+// CEREBRO FR - KNOWLEDGE BASE
+// ============================================================
+
+model CerebroDocument {
+  id           String   @id @default(uuid())
+  title        String
+  description  String?
+  category     String   // "metodologia", "caso_exito", "plantilla", "referencia", "experto"
+  program      Program? // null = applies to all programs
+  stepNumber   Int?     @map("step_number") // null = applies to all steps
+  tags         String[] // e.g. ["ventas", "pricing", "equipo"]
+  fileName     String   @map("file_name")
+  fileUrl      String   @map("file_url")
+  content      String?  // Extracted text content for embedding
+  // Note: vector embedding stored in Supabase pgvector directly
+  uploadedById String   @map("uploaded_by_id")
+  version      Int      @default(1)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  uploadedBy User @relation(fields: [uploadedById], references: [id])
+
+  @@map("cerebro_documents")
+}
+
+// ============================================================
+// KPI TRACKING - PODIUMMETRICS
+// ============================================================
+
+model KpiSnapshot {
+  id              String   @id @default(uuid())
+  clinicId        String   @map("clinic_id")
+  monthYear       String   @map("month_year") // "2026-04"
+  patientsActive  Int?     @map("patients_active")
+  avgTicket       Float?   @map("avg_ticket")
+  recurrenceRate  Float?   @map("recurrence_rate")
+  ownerHours      Float?   @map("owner_hours")
+  grossMargin     Float?   @map("gross_margin")
+  revenue         Float?
+  nps             Float?
+  occupancy       Float?
+  churnPct        Float?   @map("churn_pct")
+  isBaseline      Boolean  @default(false) @map("is_baseline") // P1 snapshot
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, monthYear])
+  @@map("kpi_snapshots")
+}
+
+// ============================================================
+// MENTORING SESSIONS
+// ============================================================
+
+model MentoringSession {
+  id           String    @id @default(uuid())
+  cohortId     String    @map("cohort_id")
+  stepNumber   Int?      @map("step_number")
+  title        String
+  date         DateTime
+  zoomLink     String?   @map("zoom_link")
+  expertName   String?   @map("expert_name")
+  summary      String?
+  recordingUrl String?   @map("recording_url")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  cohort    Cohort              @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  attendees MentoringAttendee[]
+
+  @@map("mentoring_sessions")
+}
+
+model MentoringAttendee {
+  id        String @id @default(uuid())
+  sessionId String @map("session_id")
+  userId    String @map("user_id")
+  attended  Boolean @default(false)
+
+  session MentoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@map("mentoring_attendees")
+}
+
+// ============================================================
+// MESSAGING
+// ============================================================
+
+model Message {
+  id           String    @id @default(uuid())
+  fromId       String    @map("from_id")
+  toId         String?   @map("to_id") // null = broadcast
+  cohortId     String?   @map("cohort_id") // if sent to a cohort
+  subject      String
+  body         String
+  readAt       DateTime? @map("read_at")
+  sentViaEmail Boolean   @default(false) @map("sent_via_email")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  from   User    @relation("MessageSender", fields: [fromId], references: [id])
+  to     User?   @relation("MessageRecipient", fields: [toId], references: [id])
+  cohort Cohort? @relation(fields: [cohortId], references: [id])
+
+  @@map("messages")
+}
+
+// ============================================================
+// ALERTS
+// ============================================================
+
+model Alert {
+  id           String    @id @default(uuid())
+  enrollmentId String    @map("enrollment_id")
+  type         AlertType
+  message      String
+  metadata     Json?     // Additional context
+  triggeredAt  DateTime  @default(now()) @map("triggered_at")
+  resolvedAt   DateTime? @map("resolved_at")
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
