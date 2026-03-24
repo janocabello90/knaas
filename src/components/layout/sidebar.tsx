@@ -20,6 +20,7 @@ import {
   Eye,
   ArrowLeftRight,
   UserCircle,
+  Lock,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -32,6 +33,8 @@ type NavItem = {
 type NavSection = {
   title?: string;
   items: NavItem[];
+  locked?: boolean;
+  lockedLabel?: string;
 };
 
 const adminSections: NavSection[] = [
@@ -60,38 +63,61 @@ const mentorSections: NavSection[] = [
   },
 ];
 
-const alumnoSections: NavSection[] = [
-  {
-    title: "Programa",
-    items: [
-      { label: "Mi Programa", href: "/alumno/programa", icon: <BookOpen size={20} /> },
-      { label: "KNAAS", href: "/alumno/knaas", icon: <Bot size={20} /> },
-      { label: "Mentorías", href: "/alumno/mentorias", icon: <Calendar size={20} /> },
-      { label: "Mensajes", href: "/alumno/mensajes", icon: <Mail size={20} /> },
-    ],
-  },
-  {
+function buildAlumnoSections(activeProgram: string | null): NavSection[] {
+  const programa = activeProgram ?? "ACTIVA";
+
+  const activaItems: NavItem[] = [
+    { label: "Mi Programa", href: "/alumno/programa", icon: <BookOpen size={20} /> },
+    { label: "KNAAS", href: "/alumno/knaas", icon: <Bot size={20} /> },
+    { label: "Mentorías", href: "/alumno/mentorias", icon: <Calendar size={20} /> },
+    { label: "Mensajes", href: "/alumno/mensajes", icon: <Mail size={20} /> },
+  ];
+
+  const sections: NavSection[] = [];
+
+  // Active program section
+  if (programa === "ACTIVA") {
+    sections.push({ title: "ACTIVA", items: activaItems });
+    sections.push({ title: "OPTIMIZA", items: [], locked: true, lockedLabel: "Se desbloquea al completar ACTIVA" });
+    sections.push({ title: "ESCALA", items: [], locked: true, lockedLabel: "Se desbloquea al completar OPTIMIZA" });
+  } else if (programa === "OPTIMIZA") {
+    sections.push({ title: "ACTIVA", items: [{ label: "Completado", href: "/alumno/programa", icon: <BookOpen size={20} /> }] });
+    sections.push({ title: "OPTIMIZA", items: activaItems });
+    sections.push({ title: "ESCALA", items: [], locked: true, lockedLabel: "Se desbloquea al completar OPTIMIZA" });
+  } else if (programa === "ESCALA") {
+    sections.push({ title: "ACTIVA", items: [{ label: "Completado", href: "/alumno/programa", icon: <BookOpen size={20} /> }] });
+    sections.push({ title: "OPTIMIZA", items: [{ label: "Completado", href: "/alumno/programa", icon: <BookOpen size={20} /> }] });
+    sections.push({ title: "ESCALA", items: activaItems });
+  }
+
+  // Métricas de mi clínica
+  sections.push({
     title: "Métricas de mi clínica",
     items: [
       { label: "Mis KPIs", href: "/alumno/metricas", icon: <BarChart3 size={20} /> },
     ],
-  },
-  {
+  });
+
+  // Comunidad
+  sections.push({
     title: "Comunidad",
     items: [
       { label: "Mi Cohorte", href: "/alumno/comunidad/mi-cohorte", icon: <Users size={20} /> },
       { label: "Resto de Alumnos", href: "/alumno/comunidad/alumnos", icon: <UserCircle size={20} /> },
     ],
-  },
-];
+  });
+
+  return sections;
+}
 
 interface SidebarProps {
   role: "SUPERADMIN" | "MENTOR" | "ALUMNO";
   userName: string;
   userInitials: string;
+  activeProgram?: string | null;
 }
 
-export function Sidebar({ role, userName, userInitials }: SidebarProps) {
+export function Sidebar({ role, userName, userInitials, activeProgram = null }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
@@ -127,7 +153,7 @@ export function Sidebar({ role, userName, userInitials }: SidebarProps) {
   let activeRoleColor: string;
 
   if (role === "SUPERADMIN" && viewMode === "alumno") {
-    activeSections = alumnoSections;
+    activeSections = buildAlumnoSections(activeProgram);
     activeRoleLabel = "Admin · Vista Alumno";
     activeRoleColor = "bg-amber-100 text-amber-700";
   } else if (role === "SUPERADMIN") {
@@ -139,7 +165,7 @@ export function Sidebar({ role, userName, userInitials }: SidebarProps) {
     activeRoleLabel = "Mentor";
     activeRoleColor = "bg-teal-100 text-teal-700";
   } else {
-    activeSections = alumnoSections;
+    activeSections = buildAlumnoSections(activeProgram);
     activeRoleLabel = "Alumno";
     activeRoleColor = "bg-blue-100 text-blue-700";
   }
@@ -152,6 +178,12 @@ export function Sidebar({ role, userName, userInitials }: SidebarProps) {
       : role === "MENTOR"
         ? "/mentor/ajustes"
         : "/alumno/ajustes";
+
+  const programColors: Record<string, { bg: string; text: string; border: string }> = {
+    ACTIVA: { bg: "bg-blue-600", text: "text-blue-700", border: "border-blue-200" },
+    OPTIMIZA: { bg: "bg-emerald-600", text: "text-emerald-700", border: "border-emerald-200" },
+    ESCALA: { bg: "bg-purple-600", text: "text-purple-700", border: "border-purple-200" },
+  };
 
   return (
     <aside
@@ -223,45 +255,80 @@ export function Sidebar({ role, userName, userInitials }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-4">
-        {activeSections.map((section, sIdx) => (
-          <div key={sIdx} className={cn(sIdx > 0 && "mt-4")}>
-            {section.title && !collapsed && (
-              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                {section.title}
-              </p>
-            )}
-            {sIdx > 0 && collapsed && (
-              <div className="mx-2 mb-2 border-t border-gray-200" />
-            )}
-            <div className="space-y-1">
-              {section.items.map((item) => {
-                const isActive =
-                  item.href === pathname ||
-                  (item.href !== "/admin" &&
-                    item.href !== "/mentor" &&
-                    pathname.startsWith(item.href));
+        {activeSections.map((section, sIdx) => {
+          const isProgramSection = ["ACTIVA", "OPTIMIZA", "ESCALA"].includes(section.title ?? "");
+          const colors = isProgramSection ? programColors[section.title ?? ""] : null;
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
+          return (
+            <div key={sIdx} className={cn(sIdx > 0 && "mt-3")}>
+              {/* Section title */}
+              {section.title && !collapsed && (
+                <div className="mb-2 flex items-center gap-2 px-3">
+                  {isProgramSection && (
+                    <div
+                      className={cn(
+                        "h-2 w-2 rounded-full",
+                        section.locked ? "bg-gray-300" : colors?.bg
+                      )}
+                    />
+                  )}
+                  <p
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
-                      collapsed && "justify-center px-2"
+                      "text-[10px] font-semibold uppercase tracking-wider",
+                      section.locked ? "text-gray-300" : isProgramSection ? colors?.text : "text-gray-400"
                     )}
-                    title={collapsed ? item.label : undefined}
                   >
-                    {item.icon}
-                    {!collapsed && <span>{item.label}</span>}
-                  </Link>
-                );
-              })}
+                    {section.title}
+                  </p>
+                  {section.locked && <Lock size={10} className="text-gray-300" />}
+                </div>
+              )}
+
+              {/* Collapsed section separator */}
+              {sIdx > 0 && collapsed && (
+                <div className="mx-2 mb-2 border-t border-gray-200" />
+              )}
+
+              {/* Locked section */}
+              {section.locked && !collapsed && (
+                <div className="mx-3 mb-1 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2">
+                  <p className="text-[10px] text-gray-400">{section.lockedLabel}</p>
+                </div>
+              )}
+
+              {/* Nav items */}
+              {!section.locked && (
+                <div className="space-y-1">
+                  {section.items.map((item) => {
+                    const isActive =
+                      item.href === pathname ||
+                      (item.href !== "/admin" &&
+                        item.href !== "/mentor" &&
+                        pathname.startsWith(item.href));
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                          isActive
+                            ? "bg-blue-50 text-blue-700"
+                            : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
+                          collapsed && "justify-center px-2"
+                        )}
+                        title={collapsed ? item.label : undefined}
+                      >
+                        {item.icon}
+                        {!collapsed && <span>{item.label}</span>}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* User & Settings */}
