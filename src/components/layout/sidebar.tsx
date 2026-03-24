@@ -28,6 +28,7 @@ type NavItem = {
   label: string;
   href: string;
   icon: React.ReactNode;
+  badgeId?: string; // used to match dynamic badge counts
 };
 
 type NavSection = {
@@ -46,7 +47,7 @@ const adminSections: NavSection[] = [
       { label: "Cerebro FR", href: "/admin/cerebro-fr", icon: <Brain size={20} /> },
       { label: "PodiumMetrics", href: "/admin/metricas", icon: <BarChart3 size={20} /> },
       { label: "Mentorías", href: "/admin/mentorias", icon: <Calendar size={20} /> },
-      { label: "Mensajes", href: "/admin/mensajes", icon: <Mail size={20} /> },
+      { label: "Mensajes", href: "/admin/mensajes", icon: <Mail size={20} />, badgeId: "unread-messages" },
       { label: "Monitoring IA", href: "/admin/monitoring", icon: <Activity size={20} /> },
     ],
   },
@@ -58,7 +59,7 @@ const mentorSections: NavSection[] = [
       { label: "Mi Cohorte", href: "/mentor", icon: <LayoutDashboard size={20} /> },
       { label: "Alumnos", href: "/mentor/alumnos", icon: <Users size={20} /> },
       { label: "Mentorías", href: "/mentor/mentorias", icon: <Calendar size={20} /> },
-      { label: "Mensajes", href: "/mentor/mensajes", icon: <Mail size={20} /> },
+      { label: "Mensajes", href: "/mentor/mensajes", icon: <Mail size={20} />, badgeId: "unread-messages" },
     ],
   },
 ];
@@ -70,7 +71,7 @@ function buildAlumnoSections(activeProgram: string | null): NavSection[] {
     { label: "Mi Programa", href: "/alumno/programa", icon: <BookOpen size={20} /> },
     { label: "KNAAS", href: "/alumno/knaas", icon: <Bot size={20} /> },
     { label: "Mentorías", href: "/alumno/mentorias", icon: <Calendar size={20} /> },
-    { label: "Mensajes", href: "/alumno/mensajes", icon: <Mail size={20} /> },
+    { label: "Mensajes", href: "/alumno/mensajes", icon: <Mail size={20} />, badgeId: "unread-messages" },
   ];
 
   const sections: NavSection[] = [];
@@ -121,6 +122,30 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+
+  // Unread messages badge
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/alumno/mensajes/unread-count")
+      .then((r) => r.json())
+      .then((data) => setUnreadCount(data.count || 0))
+      .catch(() => {});
+
+    // Poll every 60 seconds
+    const interval = setInterval(() => {
+      fetch("/api/alumno/mensajes/unread-count")
+        .then((r) => r.json())
+        .then((data) => setUnreadCount(data.count || 0))
+        .catch(() => {});
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Badge counts map
+  const badgeCounts: Record<string, number> = {
+    "unread-messages": unreadCount,
+  };
 
   // View mode: only available for SUPERADMIN
   const canSwitchView = role === "SUPERADMIN";
@@ -300,12 +325,14 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
                         item.href !== "/mentor" &&
                         pathname.startsWith(item.href));
 
+                    const badge = item.badgeId ? badgeCounts[item.badgeId] || 0 : 0;
+
                     return (
                       <Link
                         key={item.href}
                         href={item.href}
                         className={cn(
-                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                          "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                           isActive
                             ? "bg-blue-50 text-blue-700"
                             : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
@@ -313,8 +340,22 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
                         )}
                         title={collapsed ? item.label : undefined}
                       >
-                        {item.icon}
-                        {!collapsed && <span>{item.label}</span>}
+                        <span className="relative">
+                          {item.icon}
+                          {badge > 0 && collapsed && (
+                            <span className="absolute -right-1 -top-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-red-500 ring-2 ring-white" />
+                          )}
+                        </span>
+                        {!collapsed && (
+                          <>
+                            <span className="flex-1">{item.label}</span>
+                            {badge > 0 && (
+                              <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                                {badge > 99 ? "99+" : badge}
+                              </span>
+                            )}
+                          </>
+                        )}
                       </Link>
                     );
                   })}

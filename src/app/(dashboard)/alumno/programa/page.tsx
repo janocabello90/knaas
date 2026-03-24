@@ -11,6 +11,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
+import { UnreadMessagesWidget } from "@/components/widgets/unread-messages-widget";
 
 const monthColors: Record<number, { bg: string; border: string; text: string; badge: string }> = {
   1: { bg: "bg-indigo-50", border: "border-indigo-200", text: "text-indigo-700", badge: "bg-indigo-100 text-indigo-700" },
@@ -101,6 +102,11 @@ export default async function ProgramaPage() {
             </strong>
           </p>
         )}
+      </div>
+
+      {/* Unread Messages Widget */}
+      <div className="mb-8">
+        <UnreadMessagesWidget />
       </div>
 
       {/* Steps by Month */}
