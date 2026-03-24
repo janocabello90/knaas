@@ -91,14 +91,35 @@ export async function GET(request: Request) {
 
     const students = enrollments.map((e) => ({
       ...e.user,
+      role: "ALUMNO" as string,
       cohortName: e.cohort.name,
       program: e.cohort.program,
       completedSteps: e.stepProgress.length,
       enrollmentStatus: e.status,
     }));
 
+    // Include mentors and superadmins in the community
+    const staffUsers = await prisma.user.findMany({
+      where: {
+        role: { in: ["SUPERADMIN", "MENTOR"] },
+        id: { not: user.id },
+      },
+      select: {
+        ...studentSelect,
+        role: true,
+      },
+    });
+
+    const staffMembers = staffUsers.map((s) => ({
+      ...s,
+      cohortName: "Equipo FisioReferentes",
+      program: "STAFF",
+      completedSteps: 0,
+      enrollmentStatus: "ACTIVE" as string,
+    }));
+
     return NextResponse.json({
-      students,
+      students: [...staffMembers, ...students],
       cohortName: targetCohortName,
     });
   }
@@ -125,11 +146,32 @@ export async function GET(request: Request) {
 
   const students = enrollments.map((e) => ({
     ...e.user,
+    role: "ALUMNO" as string,
     cohortName: e.cohort.name,
     program: e.cohort.program,
     completedSteps: e.stepProgress.length,
     enrollmentStatus: e.status,
   }));
 
-  return NextResponse.json({ students });
+  // Include mentors and superadmins
+  const staffUsers = await prisma.user.findMany({
+    where: {
+      role: { in: ["SUPERADMIN", "MENTOR"] },
+      id: { not: user.id },
+    },
+    select: {
+      ...studentSelect,
+      role: true,
+    },
+  });
+
+  const staffMembers = staffUsers.map((s) => ({
+    ...s,
+    cohortName: "Equipo FisioReferentes",
+    program: "STAFF",
+    completedSteps: 0,
+    enrollmentStatus: "ACTIVE" as string,
+  }));
+
+  return NextResponse.json({ students: [...staffMembers, ...students] });
 }

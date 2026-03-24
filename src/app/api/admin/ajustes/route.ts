@@ -38,6 +38,16 @@ export async function GET() {
         lastName: user.lastName,
         email: user.email,
         role: user.role,
+        photo: user.photo,
+        bio: user.bio,
+        phone: user.phone,
+        city: user.city,
+        province: user.province,
+        country: user.country,
+        specialty: user.specialty,
+        yearsExperience: user.yearsExperience,
+        linkedinUrl: user.linkedinUrl,
+        instagramUrl: user.instagramUrl,
       },
     });
   } catch (error: unknown) {
@@ -105,6 +115,77 @@ export async function POST(request: Request) {
     });
   } catch (error: unknown) {
     console.error("Ajustes POST error:", error);
+    const message = error instanceof Error ? error.message : "Error interno del servidor";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+// ── PUT: Update profile ─────────────────────────────────────────────
+export async function PUT(request: Request) {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+
+    if (!authUser) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { supabaseAuthId: authUser.id },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    }
+
+    // Only SUPERADMIN and MENTOR can use this endpoint
+    if (user.role !== "SUPERADMIN" && user.role !== "MENTOR") {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const updateData: Record<string, unknown> = {};
+
+    if (body.firstName !== undefined) updateData.firstName = body.firstName;
+    if (body.lastName !== undefined) updateData.lastName = body.lastName;
+    if (body.photo !== undefined) updateData.photo = body.photo;
+    if (body.bio !== undefined) updateData.bio = body.bio;
+    if (body.phone !== undefined) updateData.phone = body.phone;
+    if (body.city !== undefined) updateData.city = body.city;
+    if (body.province !== undefined) updateData.province = body.province;
+    if (body.country !== undefined) updateData.country = body.country;
+    if (body.specialty !== undefined) updateData.specialty = body.specialty;
+    if (body.yearsExperience !== undefined) updateData.yearsExperience = body.yearsExperience;
+    if (body.linkedinUrl !== undefined) updateData.linkedinUrl = body.linkedinUrl;
+    if (body.instagramUrl !== undefined) updateData.instagramUrl = body.instagramUrl;
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: updateData,
+    });
+
+    return NextResponse.json({
+      profile: {
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        email: updated.email,
+        role: updated.role,
+        photo: updated.photo,
+        bio: updated.bio,
+        phone: updated.phone,
+        city: updated.city,
+        province: updated.province,
+        country: updated.country,
+        specialty: updated.specialty,
+        yearsExperience: updated.yearsExperience,
+        linkedinUrl: updated.linkedinUrl,
+        instagramUrl: updated.instagramUrl,
+      },
+    });
+  } catch (error: unknown) {
+    console.error("Ajustes PUT error:", error);
     const message = error instanceof Error ? error.message : "Error interno del servidor";
     return NextResponse.json({ error: message }, { status: 500 });
   }
