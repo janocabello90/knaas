@@ -84,6 +84,7 @@ export async function POST(request: Request) {
         clinics: true,
         enrollments: {
           include: {
+            cohort: true,
             stepProgress: { orderBy: { stepNumber: "asc" } },
           },
         },
@@ -134,22 +135,58 @@ export async function POST(request: Request) {
         }
       : null;
 
-    // Get Cerebro FR context (simplified - in production use pgvector similarity search)
+    // Get Cerebro FR context — prioritize docs matching step, then general docs
+    // Also filter by program if enrollment exists
+    const enrollmentProgram = enrollment?.cohort?.program ?? null;
+
     const cerebroDocs = await prisma.cerebroDocument.findMany({
       where: {
         isActive: true,
-        OR: [
-          { stepNumber: null },
-          { stepNumber },
+        AND: [
+          {
+            OR: [
+              { stepNumber: null },
+              { stepNumber },
+            ],
+          },
+          {
+            OR: [
+              { program: null },
+              ...(enrollmentProgram ? [{ program: enrollmentProgram }] : []),
+            ],
+          },
         ],
       },
-      take: 5,
-      select: { title: true, content: true },
+      orderBy: [
+        { stepNumber: "asc" }, // step-specific docs first (nulls last)
+        { createdAt: "desc" },
+      ],
+      take: 8,
+      select: { title: true, description: true, category: true, tags: true, content: true, stepNumber: true },
     });
+
+    type CerebroDocSelect = {
+      title: string;
+      description: string | null;
+      category: string;
+      tags: string[];
+      content: string | null;
+      stepNumber: number | null;
+    };
+
     const cerebroContext = cerebroDocs
-      .filter((d: { title: string; content: string | null }) => d.content)
-      .map((d: { title: string; content: string | null }) => `[${d.title}]: ${d.content?.substring(0, 500)}`)
-      .join("\n\n");
+      .filter((d: CerebroDocSelect) => d.content)
+      .map((d: CerebroDocSelect) => {
+        const meta = [
+          d.description ? `Resumen: ${d.description}` : null,
+          d.tags.length > 0 ? `Tags: ${d.tags.join(", ")}` : null,
+          d.category ? `Categoría: ${d.category}` : null,
+          d.stepNumber ? `Paso: ${d.stepNumber}` : null,
+        ].filter(Boolean).join(" | ");
+
+        return `[${d.title}]${meta ? ` (${meta})` : ""}\n${d.content?.substring(0, 1500)}`;
+      })
+      .join("\n\n---\n\n");
 
     // Build system prompt
     const systemPrompt = buildSystemPrompt(
