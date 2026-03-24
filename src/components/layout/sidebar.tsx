@@ -66,9 +66,14 @@ const alumnoSections: NavSection[] = [
     items: [
       { label: "Mi Programa", href: "/alumno/programa", icon: <BookOpen size={20} /> },
       { label: "KNAAS", href: "/alumno/knaas", icon: <Bot size={20} /> },
-      { label: "PodiumMetrics", href: "/alumno/metricas", icon: <BarChart3 size={20} /> },
       { label: "Mentorías", href: "/alumno/mentorias", icon: <Calendar size={20} /> },
       { label: "Mensajes", href: "/alumno/mensajes", icon: <Mail size={20} /> },
+    ],
+  },
+  {
+    title: "Métricas de mi clínica",
+    items: [
+      { label: "Mis KPIs", href: "/alumno/metricas", icon: <BarChart3 size={20} /> },
     ],
   },
   {
