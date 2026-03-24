@@ -128,17 +128,56 @@ export async function POST(request: Request) {
     );
     const stepNumber = currentStepProgress?.stepNumber ?? 1;
 
-    // Get clinic data
+    // Get clinic data + KPIs
     const clinic = dbUser.clinics[0];
-    const clinicData = clinic
-      ? {
-          nombre: clinic.name,
-          modelo: clinic.model,
-          fase: clinic.cyclePhase,
-          equipo: clinic.teamCount,
-          servicios: clinic.services,
-        }
-      : null;
+    let clinicData: Record<string, unknown> | null = null;
+
+    if (clinic) {
+      const kpiSnapshots = await prisma.kpiSnapshot.findMany({
+        where: { clinicId: clinic.id },
+        orderBy: { monthYear: "asc" },
+      });
+
+      const latest = kpiSnapshots[kpiSnapshots.length - 1];
+      const baseline = kpiSnapshots.find((s) => s.isBaseline) ?? kpiSnapshots[0];
+
+      clinicData = {
+        nombre: clinic.name,
+        modelo: clinic.model,
+        fase: clinic.cyclePhase,
+        equipo: clinic.teamCount,
+        servicios: clinic.services,
+        kpis_actuales: latest
+          ? {
+              mes: latest.monthYear,
+              facturacion: latest.revenue,
+              pacientes_activos: latest.patientsActive,
+              ticket_medio: latest.avgTicket,
+              recurrencia: latest.recurrenceRate,
+              ocupacion: latest.occupancy,
+              margen_bruto: latest.grossMargin,
+              horas_propietario: latest.ownerHours,
+              nps: latest.nps,
+              churn: latest.churnPct,
+            }
+          : "Sin datos registrados",
+        kpis_linea_base: baseline && baseline !== latest
+          ? {
+              mes: baseline.monthYear,
+              facturacion: baseline.revenue,
+              pacientes_activos: baseline.patientsActive,
+              ticket_medio: baseline.avgTicket,
+              recurrencia: baseline.recurrenceRate,
+              ocupacion: baseline.occupancy,
+              margen_bruto: baseline.grossMargin,
+              horas_propietario: baseline.ownerHours,
+              nps: baseline.nps,
+              churn: baseline.churnPct,
+            }
+          : null,
+        total_registros_kpi: kpiSnapshots.length,
+      };
+    }
 
     // Get Cerebro FR context — prioritize docs matching step, then general docs
     // Also filter by program if enrollment exists

@@ -41,6 +41,7 @@ const adminSections: NavSection[] = [
       { label: "Alumnos", href: "/admin/alumnos", icon: <Users size={20} /> },
       { label: "Cohortes", href: "/admin/cohortes", icon: <FolderKanban size={20} /> },
       { label: "Cerebro FR", href: "/admin/cerebro-fr", icon: <Brain size={20} /> },
+      { label: "PodiumMetrics", href: "/admin/metricas", icon: <BarChart3 size={20} /> },
       { label: "Mentorías", href: "/admin/mentorias", icon: <Calendar size={20} /> },
       { label: "Mensajes", href: "/admin/mensajes", icon: <Mail size={20} /> },
       { label: "Monitoring IA", href: "/admin/monitoring", icon: <Activity size={20} /> },
