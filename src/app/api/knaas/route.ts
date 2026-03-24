@@ -61,7 +61,12 @@ PRINCIPIOS DE COMPORTAMIENTO:
 — Hablas en español.`;
 
   const cerebro = cerebroContext
-    ? `\nCONTEXTO ADICIONAL DEL CEREBRO FR:\n${cerebroContext}`
+    ? `\n\nBASE DE CONOCIMIENTO — CEREBRO FR (documentos completos):
+Tienes acceso a los documentos completos del Cerebro de FisioReferentes.
+Úsalos como fuente principal para fundamentar tus respuestas, citar metodología, dar ejemplos reales y guiar al alumno.
+Cuando un documento sea relevante a la pregunta, referencia su título para que el alumno sepa de dónde viene la información.
+
+${cerebroContext}`
     : "";
 
   return `${base}\n${modeInstructions[mode] ?? modeInstructions.acompanante}\n${principles}${cerebro}`;
@@ -139,31 +144,40 @@ export async function POST(request: Request) {
     // Also filter by program if enrollment exists
     const enrollmentProgram = enrollment?.cohort?.program ?? null;
 
-    const cerebroDocs = await prisma.cerebroDocument.findMany({
+    // First: get docs specific to this step
+    const stepDocs = await prisma.cerebroDocument.findMany({
       where: {
         isActive: true,
-        AND: [
-          {
-            OR: [
-              { stepNumber: null },
-              { stepNumber },
-            ],
-          },
-          {
-            OR: [
-              { program: null },
-              ...(enrollmentProgram ? [{ program: enrollmentProgram }] : []),
-            ],
-          },
+        stepNumber,
+        OR: [
+          { program: null },
+          ...(enrollmentProgram ? [{ program: enrollmentProgram }] : []),
         ],
       },
-      orderBy: [
-        { stepNumber: "asc" }, // step-specific docs first (nulls last)
-        { createdAt: "desc" },
-      ],
-      take: 8,
-      select: { title: true, description: true, category: true, tags: true, content: true, stepNumber: true },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, title: true, description: true, category: true, tags: true, content: true, stepNumber: true },
     });
+
+    // Second: get general docs (no step assigned) that match the program
+    const generalDocs = await prisma.cerebroDocument.findMany({
+      where: {
+        isActive: true,
+        stepNumber: null,
+        OR: [
+          { program: null },
+          ...(enrollmentProgram ? [{ program: enrollmentProgram }] : []),
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, title: true, description: true, category: true, tags: true, content: true, stepNumber: true },
+    });
+
+    // Combine: step-specific first, then general — no duplicates
+    const stepDocIds = new Set(stepDocs.map((d: { id: string }) => d.id));
+    const allDocs = [
+      ...stepDocs,
+      ...generalDocs.filter((d: { id: string }) => !stepDocIds.has(d.id)),
+    ];
 
     type CerebroDocSelect = {
       title: string;
@@ -174,19 +188,20 @@ export async function POST(request: Request) {
       stepNumber: number | null;
     };
 
-    const cerebroContext = cerebroDocs
+    const cerebroContext = allDocs
       .filter((d: CerebroDocSelect) => d.content)
       .map((d: CerebroDocSelect) => {
         const meta = [
-          d.description ? `Resumen: ${d.description}` : null,
+          d.description ? `Contexto: ${d.description}` : null,
           d.tags.length > 0 ? `Tags: ${d.tags.join(", ")}` : null,
           d.category ? `Categoría: ${d.category}` : null,
-          d.stepNumber ? `Paso: ${d.stepNumber}` : null,
+          d.stepNumber ? `Paso: ${d.stepNumber}` : "Documento general",
         ].filter(Boolean).join(" | ");
 
-        return `[${d.title}]${meta ? ` (${meta})` : ""}\n${d.content?.substring(0, 1500)}`;
+        // Full document content — no truncation
+        return `=== ${d.title} ===\n(${meta})\n\n${d.content}`;
       })
-      .join("\n\n---\n\n");
+      .join("\n\n────────────────────\n\n");
 
     // Build system prompt
     const systemPrompt = buildSystemPrompt(
