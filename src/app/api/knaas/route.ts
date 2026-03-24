@@ -90,9 +90,25 @@ export async function POST(request: Request) {
       },
     });
 
-    if (!dbUser || !dbUser.apiKeyEncrypted) {
+    if (!dbUser) {
       return NextResponse.json(
-        { error: "Configura tu API key de Anthropic en Ajustes" },
+        { error: "Usuario no encontrado" },
+        { status: 400 }
+      );
+    }
+
+    // Get API key: first check user's own key, then fall back to any SUPERADMIN's key
+    let apiKey = dbUser.apiKeyEncrypted;
+    if (!apiKey) {
+      const admin = await prisma.user.findFirst({
+        where: { role: "SUPERADMIN", apiKeyEncrypted: { not: null } },
+        select: { apiKeyEncrypted: true },
+      });
+      apiKey = admin?.apiKeyEncrypted ?? null;
+    }
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "No hay API key de Anthropic configurada. Pide al admin que la configure en Ajustes." },
         { status: 400 }
       );
     }
@@ -148,7 +164,7 @@ export async function POST(request: Request) {
     // Call Anthropic API with user's key
     // TODO: decrypt apiKeyEncrypted in production
     const anthropic = new Anthropic({
-      apiKey: dbUser.apiKeyEncrypted,
+      apiKey: apiKey,
     });
 
     const response = await anthropic.messages.create({
