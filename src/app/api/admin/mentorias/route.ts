@@ -26,25 +26,39 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const cohortId = url.searchParams.get("cohortId");
 
-  const sessions = await prisma.mentoringSession.findMany({
-    where: cohortId ? { cohortId } : {},
-    include: {
-      cohort: { select: { name: true, program: true } },
-      attendees: {
-        include: {
-          user: { select: { id: true, firstName: true, lastName: true, photo: true } },
+  try {
+    const sessions = await prisma.mentoringSession.findMany({
+      where: cohortId ? { cohortId } : {},
+      include: {
+        cohort: { select: { name: true, program: true, id: true } },
+        attendees: {
+          include: {
+            user: { select: { id: true, firstName: true, lastName: true, photo: true } },
+          },
         },
       },
-    },
-    orderBy: { date: "desc" },
-  });
+      orderBy: { date: "desc" },
+    });
 
-  const cohorts = await prisma.cohort.findMany({
-    select: { id: true, name: true, program: true, status: true },
-    orderBy: { startDate: "desc" },
-  });
+    const cohorts = await prisma.cohort.findMany({
+      select: { id: true, name: true, program: true },
+      orderBy: { startDate: "desc" },
+    });
 
-  return NextResponse.json({ sessions, cohorts });
+    return NextResponse.json({ sessions, cohorts });
+  } catch (err) {
+    console.error("Error fetching mentorias:", err);
+    // If the query fails (e.g. missing column), at least return cohorts
+    try {
+      const cohorts = await prisma.cohort.findMany({
+        select: { id: true, name: true, program: true },
+        orderBy: { startDate: "desc" },
+      });
+      return NextResponse.json({ sessions: [], cohorts });
+    } catch {
+      return NextResponse.json({ sessions: [], cohorts: [] });
+    }
+  }
 }
 
 // POST — create a new mentoring session
@@ -67,18 +81,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "La fecha es obligatoria" }, { status: 400 });
     }
 
+    // Build data object, only include objectives if it's provided
+    const data: Record<string, unknown> = {
+      title: body.title.trim(),
+      cohortId: body.cohortId,
+      date: new Date(body.date),
+      stepNumber: body.stepNumber ? parseInt(String(body.stepNumber)) : null,
+      zoomLink: body.zoomLink?.trim() || null,
+      expertName: body.expertName?.trim() || null,
+      summary: body.summary?.trim() || null,
+      recordingUrl: body.recordingUrl?.trim() || null,
+    };
+    if (body.objectives?.trim()) {
+      data.objectives = body.objectives.trim();
+    }
+
     const session = await prisma.mentoringSession.create({
-      data: {
-        title: body.title.trim(),
-        cohortId: body.cohortId,
-        date: new Date(body.date),
-        stepNumber: body.stepNumber ? parseInt(String(body.stepNumber)) : null,
-        zoomLink: body.zoomLink?.trim() || null,
-        expertName: body.expertName?.trim() || null,
-        objectives: body.objectives?.trim() || null,
-        summary: body.summary?.trim() || null,
-        recordingUrl: body.recordingUrl?.trim() || null,
-      },
+      data: data as Parameters<typeof prisma.mentoringSession.create>[0]["data"],
       include: {
         cohort: { select: { name: true, program: true } },
         attendees: true,
