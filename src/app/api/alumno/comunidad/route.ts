@@ -20,6 +20,20 @@ async function getAuthUser() {
   return dbUser;
 }
 
+const studentSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  photo: true,
+  city: true,
+  province: true,
+  specialty: true,
+  yearsExperience: true,
+  linkedinUrl: true,
+  instagramUrl: true,
+  bio: true,
+};
+
 export async function GET(request: Request) {
   const user = await getAuthUser();
   if (!user) {
@@ -28,6 +42,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const type = url.searchParams.get("type"); // "mi-cohorte" or "todos"
+  const isSuperAdmin = user.role === "SUPERADMIN";
 
   // Get user's active enrollment cohort
   const activeEnrollment = user.enrollments.find(
@@ -35,32 +50,37 @@ export async function GET(request: Request) {
   );
 
   if (type === "mi-cohorte") {
-    if (!activeEnrollment) {
+    // SUPERADMIN without enrollment: show first available cohort's students
+    if (!activeEnrollment && !isSuperAdmin) {
       return NextResponse.json({ students: [], cohortName: null });
     }
 
-    // Get all students in the same cohort
+    let targetCohortId: string | null = activeEnrollment?.cohortId || null;
+    let targetCohortName: string | null = activeEnrollment?.cohort?.name || null;
+
+    // SUPERADMIN fallback: pick first active cohort
+    if (!targetCohortId && isSuperAdmin) {
+      const firstCohort = await prisma.cohort.findFirst({
+        orderBy: { startDate: "desc" },
+        select: { id: true, name: true },
+      });
+      if (firstCohort) {
+        targetCohortId = firstCohort.id;
+        targetCohortName = firstCohort.name;
+      }
+    }
+
+    if (!targetCohortId) {
+      return NextResponse.json({ students: [], cohortName: null });
+    }
+
     const enrollments = await prisma.enrollment.findMany({
       where: {
-        cohortId: activeEnrollment.cohortId,
+        cohortId: targetCohortId,
         userId: { not: user.id },
       },
       include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            photo: true,
-            city: true,
-            province: true,
-            specialty: true,
-            yearsExperience: true,
-            linkedinUrl: true,
-            instagramUrl: true,
-            bio: true,
-          },
-        },
+        user: { select: studentSelect },
         cohort: { select: { name: true, program: true } },
         stepProgress: {
           where: { status: "COMPLETED" },
@@ -79,7 +99,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       students,
-      cohortName: activeEnrollment.cohort.name,
+      cohortName: targetCohortName,
     });
   }
 
@@ -89,26 +109,12 @@ export async function GET(request: Request) {
   const enrollments = await prisma.enrollment.findMany({
     where: {
       userId: { not: user.id },
-      ...(myCohortIds.length > 0
+      ...(myCohortIds.length > 0 && !isSuperAdmin
         ? { cohortId: { notIn: myCohortIds } }
         : {}),
     },
     include: {
-      user: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          photo: true,
-          city: true,
-          province: true,
-          specialty: true,
-          yearsExperience: true,
-          linkedinUrl: true,
-          instagramUrl: true,
-          bio: true,
-        },
-      },
+      user: { select: studentSelect },
       cohort: { select: { name: true, program: true } },
       stepProgress: {
         where: { status: "COMPLETED" },
