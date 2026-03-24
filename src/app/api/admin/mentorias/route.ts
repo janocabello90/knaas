@@ -40,8 +40,7 @@ export async function GET(request: Request) {
   });
 
   const cohorts = await prisma.cohort.findMany({
-    where: { status: { in: ["ACTIVE", "DRAFT"] } },
-    select: { id: true, name: true, program: true },
+    select: { id: true, name: true, program: true, status: true },
     orderBy: { startDate: "desc" },
   });
 
