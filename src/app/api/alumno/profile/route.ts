@@ -1,0 +1,83 @@
+import { NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
+
+async function getAuthUser() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const dbUser = await prisma.user.findUnique({
+    where: { supabaseAuthId: user.id },
+  });
+  return dbUser;
+}
+
+export async function GET() {
+  const user = await getAuthUser();
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  return NextResponse.json({
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    phone: user.phone,
+    birthDate: user.birthDate,
+    photo: user.photo,
+    bio: user.bio,
+    city: user.city,
+    province: user.province,
+    country: user.country,
+    linkedinUrl: user.linkedinUrl,
+    instagramUrl: user.instagramUrl,
+    yearsExperience: user.yearsExperience,
+    specialty: user.specialty,
+    motivation: user.motivation,
+  });
+}
+
+export async function PUT(request: Request) {
+  const user = await getAuthUser();
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        firstName: body.firstName || user.firstName,
+        lastName: body.lastName || user.lastName,
+        phone: body.phone ?? user.phone,
+        birthDate: body.birthDate ? new Date(body.birthDate) : user.birthDate,
+        photo: body.photo ?? user.photo,
+        bio: body.bio ?? user.bio,
+        city: body.city ?? user.city,
+        province: body.province ?? user.province,
+        country: body.country ?? user.country,
+        linkedinUrl: body.linkedinUrl ?? user.linkedinUrl,
+        instagramUrl: body.instagramUrl ?? user.instagramUrl,
+        yearsExperience:
+          body.yearsExperience !== undefined && body.yearsExperience !== null
+            ? parseInt(String(body.yearsExperience))
+            : user.yearsExperience,
+        specialty: body.specialty ?? user.specialty,
+        motivation: body.motivation ?? user.motivation,
+      },
+    });
+
+    return NextResponse.json({ success: true, user: updated });
+  } catch (err) {
+    console.error("Error updating profile:", err);
+    return NextResponse.json(
+      { error: "Error al actualizar el perfil" },
+      { status: 500 }
+    );
+  }
+}

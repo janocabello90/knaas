@@ -142,7 +142,7 @@ export function Sidebar({ role, userName, userInitials }: SidebarProps) {
       {/* User & Settings */}
       <div className="border-t border-gray-200 p-2">
         <Link
-          href="/admin/ajustes"
+          href={role === "SUPERADMIN" ? "/admin/ajustes" : role === "MENTOR" ? "/mentor/ajustes" : "/alumno/ajustes"}
           className={cn(
             "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-100",
             collapsed && "justify-center px-2"
