@@ -76,6 +76,7 @@ export async function POST(request: Request) {
         stepNumber: body.stepNumber ? parseInt(String(body.stepNumber)) : null,
         zoomLink: body.zoomLink?.trim() || null,
         expertName: body.expertName?.trim() || null,
+        objectives: body.objectives?.trim() || null,
         summary: body.summary?.trim() || null,
         recordingUrl: body.recordingUrl?.trim() || null,
       },

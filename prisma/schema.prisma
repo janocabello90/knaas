@@ -325,6 +325,7 @@ model MentoringSession {
   date         DateTime
   zoomLink     String?   @map("zoom_link")
   expertName   String?   @map("expert_name")
+  objectives   String?
   summary      String?
   recordingUrl String?   @map("recording_url")
   createdAt    DateTime  @default(now()) @map("created_at")

@@ -38,6 +38,7 @@ export async function PUT(
         stepNumber: body.stepNumber !== undefined ? (body.stepNumber ? parseInt(String(body.stepNumber)) : null) : undefined,
         zoomLink: body.zoomLink !== undefined ? (body.zoomLink?.trim() || null) : undefined,
         expertName: body.expertName !== undefined ? (body.expertName?.trim() || null) : undefined,
+        objectives: body.objectives !== undefined ? (body.objectives?.trim() || null) : undefined,
         summary: body.summary !== undefined ? (body.summary?.trim() || null) : undefined,
         recordingUrl: body.recordingUrl !== undefined ? (body.recordingUrl?.trim() || null) : undefined,
       },

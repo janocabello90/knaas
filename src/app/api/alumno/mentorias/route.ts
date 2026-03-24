@@ -54,6 +54,7 @@ export async function GET() {
     stepNumber: s.stepNumber,
     zoomLink: s.zoomLink,
     expertName: s.expertName,
+    objectives: (s as Record<string, unknown>).objectives as string | null,
     summary: s.summary,
     recordingUrl: s.recordingUrl,
     cohortName: s.cohort.name,
