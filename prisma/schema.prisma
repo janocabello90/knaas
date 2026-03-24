@@ -89,6 +89,16 @@ model User {
   photo           String?
   bio             String?
   phone           String?
+  birthDate       DateTime? @map("birth_date")
+  city            String?
+  province        String?
+  country         String?  @default("España")
+  linkedinUrl     String?  @map("linkedin_url")
+  instagramUrl    String?  @map("instagram_url")
+  yearsExperience Int?     @map("years_experience")
+  specialty       String?  // Especialidad en fisioterapia
+  motivation      String?  // ¿Por qué te apuntaste al programa?
+  onboardingDone  Boolean  @default(false) @map("onboarding_done")
   apiKeyEncrypted String?  @map("api_key_encrypted")
   stripeCustomerId String? @map("stripe_customer_id")
   createdAt       DateTime @default(now()) @map("created_at")

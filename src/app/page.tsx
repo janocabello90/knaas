@@ -17,6 +17,9 @@ export default async function Home() {
       redirect("/mentor");
       break;
     case "ALUMNO":
+      if (!user.onboardingDone) {
+        redirect("/alumno/onboarding");
+      }
       redirect("/alumno/programa");
       break;
     default:
