@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Send, Bot, User, Compass, Search, Wand2 } from "lucide-react";
+import { Send, Bot, User, Compass, Search, Wand2, X, Key, ExternalLink } from "lucide-react";
 
 type Message = {
   role: "user" | "assistant";
@@ -36,6 +36,85 @@ const modeConfig: Record<KnaasMode, { label: string; icon: React.ReactNode; colo
   },
 };
 
+function ApiKeyModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="relative w-full max-w-lg rounded-2xl bg-white p-8 shadow-xl">
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+        >
+          <X size={20} />
+        </button>
+
+        <div className="mb-6 flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">
+            <Key size={24} className="text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Configurar API Key</h2>
+            <p className="text-sm text-gray-500">Necesaria para activar KNAAS</p>
+          </div>
+        </div>
+
+        <div className="space-y-4 text-sm text-gray-700">
+          <div className="rounded-xl bg-blue-50 p-4">
+            <p className="mb-2 font-semibold text-blue-900">¿Qué es esto?</p>
+            <p className="text-blue-800">
+              KNAAS funciona con Claude, la IA de Anthropic. Para usarlo necesitas una API key — es como una contraseña que conecta tu cuenta con el servicio de IA.
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-amber-50 p-4">
+            <p className="mb-2 font-semibold text-amber-900">¿Cuánto cuesta?</p>
+            <p className="text-amber-800">
+              Pagas solo por lo que uses. Una conversación típica cuesta entre 0,01€ y 0,05€.
+              El uso medio de un alumno en todo el programa ACTIVA ronda los 5-15€ en total.
+              Anthropic te da 5$ gratis de crédito al crear tu cuenta.
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-green-50 p-4">
+            <p className="mb-3 font-semibold text-green-900">¿Cómo se configura? (2 minutos)</p>
+            <ol className="list-inside list-decimal space-y-2 text-green-800">
+              <li>
+                Ve a{" "}
+                <a
+                  href="https://console.anthropic.com/settings/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-medium text-green-700 underline"
+                >
+                  console.anthropic.com
+                  <ExternalLink size={12} />
+                </a>{" "}
+                y crea una cuenta (o inicia sesión)
+              </li>
+              <li>Haz clic en <strong>"Create Key"</strong></li>
+              <li>Copia la clave que empieza por <code className="rounded bg-green-100 px-1.5 py-0.5 text-xs">sk-ant-...</code></li>
+              <li>Pide a tu mentor o admin de FisioReferentes que la guarde en <strong>Ajustes</strong></li>
+            </ol>
+          </div>
+
+          <div className="rounded-xl bg-gray-50 p-4">
+            <p className="text-xs text-gray-500">
+              Tu API key se almacena de forma segura y solo se usa para las conversaciones de KNAAS.
+              Ningún dato de tu clínica sale del sistema. Puedes cambiarla o eliminarla en cualquier momento.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Entendido
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function KnaasPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -48,6 +127,7 @@ export default function KnaasPage() {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<KnaasMode>("acompanante");
   const [isLoading, setIsLoading] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -80,23 +160,30 @@ export default function KnaasPage() {
 
       const data = await res.json();
 
+      if (!res.ok && data.error) {
+        // Check if error is about missing API key
+        if (data.error.toLowerCase().includes("api key") || data.error.toLowerCase().includes("anthropic")) {
+          setShowApiKeyModal(true);
+          // Remove the user message since it didn't get processed
+          setMessages((prev) => prev.slice(0, -1));
+          setInput(userMessage.content);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: data.response ?? "Lo siento, ha habido un error. Inténtalo de nuevo.",
+          content: data.response ?? data.error ?? "Ha ocurrido un error inesperado.",
           timestamp: new Date(),
         },
       ]);
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "Error de conexión. Verifica tu API key de Anthropic en Ajustes.",
-          timestamp: new Date(),
-        },
-      ]);
+      setShowApiKeyModal(true);
+      setMessages((prev) => prev.slice(0, -1));
+      setInput(userMessage.content);
     } finally {
       setIsLoading(false);
     }
@@ -104,6 +191,8 @@ export default function KnaasPage() {
 
   return (
     <div className="mx-auto flex h-[calc(100vh-6rem)] max-w-4xl flex-col">
+      {showApiKeyModal && <ApiKeyModal onClose={() => setShowApiKeyModal(false)} />}
+
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div>
