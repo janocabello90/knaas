@@ -28,6 +28,7 @@ export default function OnboardingPage() {
     yearsExperience: "",
     specialty: "",
     motivation: "",
+    bio: "",
   });
 
   const updateField = (field: string, value: string) => {
