@@ -32,7 +32,7 @@ type CerebroDoc = {
 
 const CATEGORIES = [
   { value: "", label: "Todas" },
-  { value: "metodologia", label: "Metodología" },
+  { value: "fundamentos", label: "Fundamentos" },
   { value: "caso_exito", label: "Caso de éxito" },
   { value: "plantilla", label: "Plantilla" },
   { value: "referencia", label: "Referencia" },
@@ -48,7 +48,7 @@ const PROGRAMS = [
 
 function getCategoryColor(category: string): string {
   const colors: Record<string, string> = {
-    metodologia: "bg-blue-100 text-blue-700",
+    fundamentos: "bg-blue-100 text-blue-700",
     caso_exito: "bg-green-100 text-green-700",
     plantilla: "bg-purple-100 text-purple-700",
     referencia: "bg-amber-100 text-amber-700",
@@ -59,7 +59,7 @@ function getCategoryColor(category: string): string {
 
 function getCategoryLabel(category: string): string {
   const labels: Record<string, string> = {
-    metodologia: "Metodología",
+    fundamentos: "Fundamentos",
     caso_exito: "Caso de éxito",
     plantilla: "Plantilla",
     referencia: "Referencia",

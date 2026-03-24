@@ -38,7 +38,7 @@ export default function SubirDocumentoPage() {
   const [formData, setFormData] = useState<FormData>({
     title: "",
     description: "",
-    category: "metodologia",
+    category: "fundamentos",
     program: "",
     stepNumber: "",
     tags: "",
@@ -366,7 +366,7 @@ export default function SubirDocumentoPage() {
               onChange={handleInputChange}
               className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="metodologia">Metodología</option>
+              <option value="fundamentos">Fundamentos</option>
               <option value="caso_exito">Caso de éxito</option>
               <option value="plantilla">Plantilla</option>
               <option value="referencia">Referencia</option>
