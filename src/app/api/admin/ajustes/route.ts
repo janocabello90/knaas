@@ -90,7 +90,8 @@ export async function POST(request: Request) {
     });
 
     // Return masked version
-    const masked = `${updatedUser.apiKeyEncrypted.substring(0, 10)}...${updatedUser.apiKeyEncrypted.substring(updatedUser.apiKeyEncrypted.length - 4)}`;
+    const key = updatedUser.apiKeyEncrypted ?? "";
+    const masked = `${key.substring(0, 10)}...${key.substring(key.length - 4)}`;
 
     return NextResponse.json({
       exists: true,
