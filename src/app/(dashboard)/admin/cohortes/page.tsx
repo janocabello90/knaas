@@ -32,7 +32,7 @@ function getStatusBadge(status: string): { bg: string; text: string; label: stri
   }
 }
 
-export default async function CohortesList(): Promise<JSX.Element> {
+export default async function CohortesList() {
   await requireRole(["SUPERADMIN"]);
   const cohortes = await getCohortes();
 
