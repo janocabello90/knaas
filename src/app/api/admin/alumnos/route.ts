@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
 import { prisma } from '@/lib/prisma';
+import { StepStatus } from '@prisma/client';
 import crypto from 'crypto';
 
 interface CreateAlumnoRequest {
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const stepProgressRecords = Array.from({ length: 16 }, (_, i) => ({
       enrollmentId: enrollment.id,
       stepNumber: i + 1,
-      status: i === 0 ? 'AVAILABLE' : 'LOCKED',
+      status: (i === 0 ? 'AVAILABLE' : 'LOCKED') as StepStatus,
     }));
 
     await prisma.stepProgress.createMany({
