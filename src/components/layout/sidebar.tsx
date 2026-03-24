@@ -78,12 +78,12 @@ function buildAlumnoSections(activeProgram: string | null): NavSection[] {
   // Active program section
   if (programa === "ACTIVA") {
     sections.push({ title: "ACTIVA", items: activaItems });
-    sections.push({ title: "OPTIMIZA", items: [], locked: true, lockedLabel: "Se desbloquea al completar ACTIVA" });
-    sections.push({ title: "ESCALA", items: [], locked: true, lockedLabel: "Se desbloquea al completar OPTIMIZA" });
+    sections.push({ title: "OPTIMIZA", items: [], locked: true });
+    sections.push({ title: "ESCALA", items: [], locked: true });
   } else if (programa === "OPTIMIZA") {
     sections.push({ title: "ACTIVA", items: [{ label: "Completado", href: "/alumno/programa", icon: <BookOpen size={20} /> }] });
     sections.push({ title: "OPTIMIZA", items: activaItems });
-    sections.push({ title: "ESCALA", items: [], locked: true, lockedLabel: "Se desbloquea al completar OPTIMIZA" });
+    sections.push({ title: "ESCALA", items: [], locked: true });
   } else if (programa === "ESCALA") {
     sections.push({ title: "ACTIVA", items: [{ label: "Completado", href: "/alumno/programa", icon: <BookOpen size={20} /> }] });
     sections.push({ title: "OPTIMIZA", items: [{ label: "Completado", href: "/alumno/programa", icon: <BookOpen size={20} /> }] });
@@ -289,12 +289,6 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
                 <div className="mx-2 mb-2 border-t border-gray-200" />
               )}
 
-              {/* Locked section */}
-              {section.locked && !collapsed && (
-                <div className="mx-3 mb-1 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2">
-                  <p className="text-[10px] text-gray-400">{section.lockedLabel}</p>
-                </div>
-              )}
 
               {/* Nav items */}
               {!section.locked && (
