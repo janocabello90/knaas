@@ -113,6 +113,8 @@ model User {
   uploadedDocuments   CerebroDocument[]
   validatedOutputs    Output[]            @relation("OutputValidator")
   mentoringSessions   MentoringAttendee[]
+  assignedTasks       AdminTask[]         @relation("TaskAssignee")
+  createdTasks        AdminTask[]         @relation("TaskCreator")
 
   @@map("users")
 }
@@ -161,6 +163,7 @@ model Cohort {
   mentors          CohortMentor[]
   mentoringSession MentoringSession[]
   messages         Message[]
+  adminTasks       AdminTask[]
 
   @@map("cohorts")
 }
@@ -387,4 +390,55 @@ model Alert {
   enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 
   @@map("alerts")
+}
+
+// ============================================================
+// ADMIN TASKS — Internal task management for academy ops
+// ============================================================
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskTriggerType {
+  MANUAL                  // Checked manually
+  MENTORIAS_SCHEDULED     // Auto when cohort has mentoring sessions
+  CEREBRO_DOCS_UPLOADED   // Auto when step/program has docs in Cerebro FR
+  MESSAGES_SENT           // Auto when message sent to cohort
+  KPI_REVIEW              // Auto when all students in cohort have KPI data
+  ALUMNOS_ONBOARDED       // Auto when all cohort students completed onboarding
+  STEPS_VALIDATED         // Auto when step outputs validated for cohort
+}
+
+model AdminTask {
+  id            String          @id @default(uuid())
+  title         String
+  description   String?
+  category      String          // "mentorias", "contenido", "alumnos", "comunicacion", "kpis", "general"
+  status        TaskStatus      @default(PENDING)
+  priority      TaskPriority    @default(MEDIUM)
+  dueDate       DateTime?       @map("due_date")
+  assignedToId  String?         @map("assigned_to_id")
+  createdById   String          @map("created_by_id")
+  cohortId      String?         @map("cohort_id")
+  triggerType   TaskTriggerType @default(MANUAL) @map("trigger_type")
+  triggerConfig Json?           @map("trigger_config") // e.g. { "cohortId": "xxx", "minSessions": 4 }
+  completedAt   DateTime?       @map("completed_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  assignedTo User?  @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy  User   @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  cohort     Cohort? @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+
+  @@map("admin_tasks")
 }
