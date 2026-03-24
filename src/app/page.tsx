@@ -22,6 +22,7 @@ export default async function Home() {
       }
       redirect("/alumno/programa");
       break;
+      break;
     default:
       redirect("/login");
   }

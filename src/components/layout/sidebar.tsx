@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -15,11 +15,13 @@ import {
   Bot,
   BarChart3,
   Settings,
-  LogOut,
   ChevronLeft,
   GraduationCap,
+  Eye,
+  ArrowLeftRight,
+  UserCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type NavItem = {
   label: string;
@@ -27,29 +29,54 @@ type NavItem = {
   icon: React.ReactNode;
 };
 
-const adminNav: NavItem[] = [
-  { label: "Dashboard", href: "/admin", icon: <LayoutDashboard size={20} /> },
-  { label: "Alumnos", href: "/admin/alumnos", icon: <Users size={20} /> },
-  { label: "Cohortes", href: "/admin/cohortes", icon: <FolderKanban size={20} /> },
-  { label: "Cerebro FR", href: "/admin/cerebro-fr", icon: <Brain size={20} /> },
-  { label: "Mentorías", href: "/admin/mentorias", icon: <Calendar size={20} /> },
-  { label: "Mensajes", href: "/admin/mensajes", icon: <Mail size={20} /> },
-  { label: "Monitoring IA", href: "/admin/monitoring", icon: <Activity size={20} /> },
+type NavSection = {
+  title?: string;
+  items: NavItem[];
+};
+
+const adminSections: NavSection[] = [
+  {
+    items: [
+      { label: "Dashboard", href: "/admin", icon: <LayoutDashboard size={20} /> },
+      { label: "Alumnos", href: "/admin/alumnos", icon: <Users size={20} /> },
+      { label: "Cohortes", href: "/admin/cohortes", icon: <FolderKanban size={20} /> },
+      { label: "Cerebro FR", href: "/admin/cerebro-fr", icon: <Brain size={20} /> },
+      { label: "Mentorías", href: "/admin/mentorias", icon: <Calendar size={20} /> },
+      { label: "Mensajes", href: "/admin/mensajes", icon: <Mail size={20} /> },
+      { label: "Monitoring IA", href: "/admin/monitoring", icon: <Activity size={20} /> },
+    ],
+  },
 ];
 
-const mentorNav: NavItem[] = [
-  { label: "Mi Cohorte", href: "/mentor", icon: <LayoutDashboard size={20} /> },
-  { label: "Alumnos", href: "/mentor/alumnos", icon: <Users size={20} /> },
-  { label: "Mentorías", href: "/mentor/mentorias", icon: <Calendar size={20} /> },
-  { label: "Mensajes", href: "/mentor/mensajes", icon: <Mail size={20} /> },
+const mentorSections: NavSection[] = [
+  {
+    items: [
+      { label: "Mi Cohorte", href: "/mentor", icon: <LayoutDashboard size={20} /> },
+      { label: "Alumnos", href: "/mentor/alumnos", icon: <Users size={20} /> },
+      { label: "Mentorías", href: "/mentor/mentorias", icon: <Calendar size={20} /> },
+      { label: "Mensajes", href: "/mentor/mensajes", icon: <Mail size={20} /> },
+    ],
+  },
 ];
 
-const alumnoNav: NavItem[] = [
-  { label: "Mi Programa", href: "/alumno/programa", icon: <BookOpen size={20} /> },
-  { label: "KNAAS", href: "/alumno/knaas", icon: <Bot size={20} /> },
-  { label: "PodiumMetrics", href: "/alumno/metricas", icon: <BarChart3 size={20} /> },
-  { label: "Mentorías", href: "/alumno/mentorias", icon: <Calendar size={20} /> },
-  { label: "Mensajes", href: "/alumno/mensajes", icon: <Mail size={20} /> },
+const alumnoSections: NavSection[] = [
+  {
+    title: "Programa",
+    items: [
+      { label: "Mi Programa", href: "/alumno/programa", icon: <BookOpen size={20} /> },
+      { label: "KNAAS", href: "/alumno/knaas", icon: <Bot size={20} /> },
+      { label: "PodiumMetrics", href: "/alumno/metricas", icon: <BarChart3 size={20} /> },
+      { label: "Mentorías", href: "/alumno/mentorias", icon: <Calendar size={20} /> },
+      { label: "Mensajes", href: "/alumno/mensajes", icon: <Mail size={20} /> },
+    ],
+  },
+  {
+    title: "Comunidad",
+    items: [
+      { label: "Mi Cohorte", href: "/alumno/comunidad/mi-cohorte", icon: <Users size={20} /> },
+      { label: "Resto de Alumnos", href: "/alumno/comunidad/alumnos", icon: <UserCircle size={20} /> },
+    ],
+  },
 ];
 
 interface SidebarProps {
@@ -60,20 +87,75 @@ interface SidebarProps {
 
 export function Sidebar({ role, userName, userInitials }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
 
-  const navItems =
-    role === "SUPERADMIN" ? adminNav : role === "MENTOR" ? mentorNav : alumnoNav;
+  // View mode: only available for SUPERADMIN
+  const canSwitchView = role === "SUPERADMIN";
+  const [viewMode, setViewMode] = useState<"admin" | "alumno">("admin");
+
+  // Detect view mode from current path
+  useEffect(() => {
+    if (canSwitchView) {
+      if (pathname.startsWith("/alumno")) {
+        setViewMode("alumno");
+      } else {
+        setViewMode("admin");
+      }
+    }
+  }, [pathname, canSwitchView]);
+
+  const handleSwitchView = () => {
+    if (viewMode === "admin") {
+      setViewMode("alumno");
+      router.push("/alumno/programa");
+    } else {
+      setViewMode("admin");
+      router.push("/admin");
+    }
+  };
+
+  // Determine which sections to show based on role + viewMode
+  let activeSections: NavSection[];
+  let activeRoleLabel: string;
+  let activeRoleColor: string;
+
+  if (role === "SUPERADMIN" && viewMode === "alumno") {
+    activeSections = alumnoSections;
+    activeRoleLabel = "Admin · Vista Alumno";
+    activeRoleColor = "bg-amber-100 text-amber-700";
+  } else if (role === "SUPERADMIN") {
+    activeSections = adminSections;
+    activeRoleLabel = "Administrador";
+    activeRoleColor = "bg-purple-100 text-purple-700";
+  } else if (role === "MENTOR") {
+    activeSections = mentorSections;
+    activeRoleLabel = "Mentor";
+    activeRoleColor = "bg-teal-100 text-teal-700";
+  } else {
+    activeSections = alumnoSections;
+    activeRoleLabel = "Alumno";
+    activeRoleColor = "bg-blue-100 text-blue-700";
+  }
+
+  const settingsHref =
+    role === "SUPERADMIN"
+      ? viewMode === "alumno"
+        ? "/alumno/ajustes"
+        : "/admin/ajustes"
+      : role === "MENTOR"
+        ? "/mentor/ajustes"
+        : "/alumno/ajustes";
 
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-screen border-r border-gray-200 bg-white transition-all duration-300",
+        "fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-gray-200 bg-white transition-all duration-300",
         collapsed ? "w-16" : "w-64"
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center justify-between border-b border-gray-200 px-4">
+      <div className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 px-4">
         {!collapsed && (
           <div className="flex items-center gap-2">
             <GraduationCap size={28} className="text-blue-600" />
@@ -94,55 +176,92 @@ export function Sidebar({ role, userName, userInitials }: SidebarProps) {
         </button>
       </div>
 
-      {/* Role badge */}
+      {/* Role badge + View switcher */}
       {!collapsed && (
-        <div className="border-b border-gray-200 px-4 py-3">
-          <span
-            className={cn(
-              "inline-block rounded-full px-2.5 py-0.5 text-xs font-medium",
-              role === "SUPERADMIN" && "bg-purple-100 text-purple-700",
-              role === "MENTOR" && "bg-teal-100 text-teal-700",
-              role === "ALUMNO" && "bg-blue-100 text-blue-700"
+        <div className="shrink-0 border-b border-gray-200 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <span
+              className={cn(
+                "inline-block rounded-full px-2.5 py-0.5 text-xs font-medium",
+                activeRoleColor
+              )}
+            >
+              {activeRoleLabel}
+            </span>
+            {canSwitchView && (
+              <button
+                onClick={handleSwitchView}
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                title={viewMode === "admin" ? "Cambiar a Vista Alumno" : "Cambiar a Vista Admin"}
+              >
+                <ArrowLeftRight size={14} />
+                <span>{viewMode === "admin" ? "Vista Alumno" : "Vista Admin"}</span>
+              </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Collapsed view switcher */}
+      {collapsed && canSwitchView && (
+        <div className="shrink-0 border-b border-gray-200 px-2 py-2">
+          <button
+            onClick={handleSwitchView}
+            className="flex w-full items-center justify-center rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            title={viewMode === "admin" ? "Cambiar a Vista Alumno" : "Cambiar a Vista Admin"}
           >
-            {role === "SUPERADMIN" ? "Super Admin" : role === "MENTOR" ? "Mentor" : "Alumno"}
-          </span>
+            <Eye size={18} />
+          </button>
         </div>
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-2 py-4">
-        {navItems.map((item) => {
-          const isActive =
-            item.href === pathname ||
-            (item.href !== "/admin" &&
-              item.href !== "/mentor" &&
-              pathname.startsWith(item.href));
+      <nav className="flex-1 overflow-y-auto px-2 py-4">
+        {activeSections.map((section, sIdx) => (
+          <div key={sIdx} className={cn(sIdx > 0 && "mt-4")}>
+            {section.title && !collapsed && (
+              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                {section.title}
+              </p>
+            )}
+            {sIdx > 0 && collapsed && (
+              <div className="mx-2 mb-2 border-t border-gray-200" />
+            )}
+            <div className="space-y-1">
+              {section.items.map((item) => {
+                const isActive =
+                  item.href === pathname ||
+                  (item.href !== "/admin" &&
+                    item.href !== "/mentor" &&
+                    pathname.startsWith(item.href));
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
-                collapsed && "justify-center px-2"
-              )}
-              title={collapsed ? item.label : undefined}
-            >
-              {item.icon}
-              {!collapsed && <span>{item.label}</span>}
-            </Link>
-          );
-        })}
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-blue-50 text-blue-700"
+                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
+                      collapsed && "justify-center px-2"
+                    )}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    {item.icon}
+                    {!collapsed && <span>{item.label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* User & Settings */}
-      <div className="border-t border-gray-200 p-2">
+      <div className="shrink-0 border-t border-gray-200 p-2">
         <Link
-          href={role === "SUPERADMIN" ? "/admin/ajustes" : role === "MENTOR" ? "/mentor/ajustes" : "/alumno/ajustes"}
+          href={settingsHref}
           className={cn(
             "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-100",
             collapsed && "justify-center px-2"

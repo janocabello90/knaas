@@ -37,6 +37,8 @@ export async function requireAuth() {
 
 export async function requireRole(allowedRoles: UserRole[]) {
   const user = await requireAuth();
+  // SUPERADMIN can access all views (admin, mentor, alumno)
+  if (user.role === "SUPERADMIN") return user;
   if (!allowedRoles.includes(user.role)) {
     redirect("/");
   }
