@@ -37,6 +37,11 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.9.0"
+  },
+  "devDependencies": {
+    "@types/pdf-parse": "^1.1.4"
   }
 }
