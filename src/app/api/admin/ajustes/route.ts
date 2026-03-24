@@ -24,9 +24,10 @@ export async function GET() {
     }
 
     // Check if API key exists and return masked version
-    const hasApiKey = !!user.apiKeyEncrypted;
-    const masked = hasApiKey
-      ? `${user.apiKeyEncrypted.substring(0, 10)}...${user.apiKeyEncrypted.substring(user.apiKeyEncrypted.length - 4)}`
+    const apiKey = user.apiKeyEncrypted;
+    const hasApiKey = !!apiKey;
+    const masked = hasApiKey && apiKey
+      ? `${apiKey.substring(0, 10)}...${apiKey.substring(apiKey.length - 4)}`
       : null;
 
     return NextResponse.json({
