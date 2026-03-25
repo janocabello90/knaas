@@ -95,11 +95,20 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     type,
   } = metadata;
 
-  // Create or update payment record
+  // Create or update payment record — IVA 21%
+  const totalAmount = (session.amount_total || 0) / 100; // Convert from cents
+  const IVA_RATE = 21;
+  const baseAmount = Math.round((totalAmount / (1 + IVA_RATE / 100)) * 100) / 100;
+  const ivaAmount = Math.round((totalAmount - baseAmount) * 100) / 100;
+
   const paymentData = {
-    amount: (session.amount_total || 0) / 100, // Convert from cents
+    baseAmount,
+    ivaRate: IVA_RATE,
+    ivaAmount,
+    totalAmount,
     currency: session.currency?.toUpperCase() || "EUR",
     type: (type === "INSTALLMENT" ? "INSTALLMENT" : "SINGLE") as "SINGLE" | "INSTALLMENT",
+    method: "STRIPE" as const,
     status: "COMPLETED" as const,
     stripeSessionId: session.id,
     stripePaymentIntentId:
@@ -177,10 +186,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       : null;
 
     if (user?.email) {
-      // Payment confirmation
+      // Payment confirmation with IVA breakdown
       sendPaymentConfirmation(user.email, {
         firstName: user.firstName || "Alumno/a",
-        amount: (session.amount_total || 0) / 100,
+        baseAmount,
+        ivaRate: IVA_RATE,
+        ivaAmount,
+        totalAmount,
         currency: session.currency?.toUpperCase() || "EUR",
         method: "STRIPE",
         cohortName: cohort?.name || undefined,
@@ -269,7 +281,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     if (user?.email) {
       sendPaymentRefunded(user.email, {
         firstName: user.firstName || "Alumno/a",
-        amount: existing.amount,
+        amount: existing.totalAmount,
         currency: existing.currency,
         invoiceNumber: existing.invoiceNumber || undefined,
       }).catch((err) => console.error("[Email] Failed to send refund email:", err));

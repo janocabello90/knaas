@@ -2,9 +2,24 @@
 
 import { useState, useEffect, useCallback } from "react";
 
+// ─── Datos fiscales FisioReferentes ────────────────────────────────
+const EMISOR = {
+  nombre: "FISIOREFERENTES SL",
+  direccion: "Paseo Fernando el Católico 39 3ºD (50006)",
+  ciudad: "ZARAGOZA",
+  nif: "B56869407",
+  email: "hola@fisioreferentes.com",
+};
+
+const IVA_RATE = 21;
+
+// ─── Types ─────────────────────────────────────────────────────────
 type Payment = {
   id: string;
-  amount: number;
+  baseAmount: number;
+  ivaRate: number;
+  ivaAmount: number;
+  totalAmount: number;
   currency: string;
   type: "SINGLE" | "INSTALLMENT";
   method: "STRIPE" | "TRANSFERENCIA";
@@ -43,6 +58,8 @@ type StudentOption = {
 
 type Stats = {
   totalRevenue: number;
+  totalBase: number;
+  totalIva: number;
   pendingAmount: number;
   totalPayments: number;
   completedPayments: number;
@@ -96,7 +113,7 @@ export default function FacturacionPage() {
     userId: "",
     cohortId: "",
     enrollmentId: "",
-    totalAmount: "",
+    baseAmount: "", // SIN IVA
     method: "STRIPE" as "STRIPE" | "TRANSFERENCIA",
     type: "SINGLE" as "SINGLE" | "INSTALLMENT",
     installments: "1",
@@ -106,9 +123,16 @@ export default function FacturacionPage() {
 
   // Expanded row
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  // Action loading
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // IVA calculations for form preview
+  const formBase = parseFloat(form.baseAmount) || 0;
+  const formIva = Math.round((formBase * IVA_RATE / 100) * 100) / 100;
+  const formTotal = Math.round((formBase + formIva) * 100) / 100;
+  const numCuotas = form.type === "INSTALLMENT" ? parseInt(form.installments) || 1 : 1;
+  const perCuotaBase = Math.round((formBase / numCuotas) * 100) / 100;
+  const perCuotaIva = Math.round((perCuotaBase * IVA_RATE / 100) * 100) / 100;
+  const perCuotaTotal = Math.round((perCuotaBase + perCuotaIva) * 100) / 100;
 
   const fetchData = useCallback(async () => {
     try {
@@ -137,7 +161,6 @@ export default function FacturacionPage() {
     fetchData();
   }, [fetchData]);
 
-  // When student changes, auto-set cohort from their enrollment
   useEffect(() => {
     if (form.userId) {
       const student = students.find((s) => s.id === form.userId);
@@ -153,7 +176,7 @@ export default function FacturacionPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.userId || !form.totalAmount) return;
+    if (!form.userId || !form.baseAmount) return;
 
     try {
       setCreating(true);
@@ -164,7 +187,7 @@ export default function FacturacionPage() {
           userId: form.userId,
           cohortId: form.cohortId || null,
           enrollmentId: form.enrollmentId || null,
-          totalAmount: parseFloat(form.totalAmount),
+          baseAmount: parseFloat(form.baseAmount),
           method: form.method,
           type: form.type,
           installments: parseInt(form.installments),
@@ -180,14 +203,14 @@ export default function FacturacionPage() {
 
       const data = await res.json();
       setSuccess(
-        `${data.count} pago(s) creado(s) correctamente como ${form.method === "STRIPE" ? "Stripe" : "Transferencia"}`
+        `${data.count} pago(s) creado(s) — ${fmt(formTotal)} (${fmt(formBase)} + ${fmt(formIva)} IVA)`
       );
       setShowCreate(false);
       setForm({
         userId: "",
         cohortId: "",
         enrollmentId: "",
-        totalAmount: "",
+        baseAmount: "",
         method: "STRIPE",
         type: "SINGLE",
         installments: "1",
@@ -195,7 +218,7 @@ export default function FacturacionPage() {
         notes: "",
       });
       await fetchData();
-      setTimeout(() => setSuccess(""), 4000);
+      setTimeout(() => setSuccess(""), 5000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -250,7 +273,7 @@ export default function FacturacionPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Facturación</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Gestión de pagos — Stripe y transferencias bancarias
+            Gestión de pagos — Stripe y transferencias bancarias · IVA {IVA_RATE}%
           </p>
         </div>
         <button
@@ -261,7 +284,15 @@ export default function FacturacionPage() {
         </button>
       </div>
 
-      {/* Success/Error messages */}
+      {/* Datos fiscales emisor */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
+        <p className="text-xs font-medium text-gray-400 mb-1">Datos del emisor</p>
+        <p className="font-semibold text-gray-900">{EMISOR.nombre}</p>
+        <p>{EMISOR.direccion} · {EMISOR.ciudad}</p>
+        <p>NIF: {EMISOR.nif} · {EMISOR.email}</p>
+      </div>
+
+      {/* Success/Error */}
       {success && (
         <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-700">
           {success}
@@ -278,22 +309,30 @@ export default function FacturacionPage() {
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <p className="text-xs font-medium text-gray-500">Ingresos Totales</p>
             <p className="mt-1 text-2xl font-bold text-green-600">{fmt(stats.totalRevenue)}</p>
+            <p className="mt-1 text-xs text-gray-400">
+              Base: {fmt(stats.totalBase)} · IVA: {fmt(stats.totalIva)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <p className="text-xs font-medium text-gray-500">Base Imponible</p>
+            <p className="mt-1 text-2xl font-bold text-gray-900">{fmt(stats.totalBase)}</p>
             <p className="mt-1 text-xs text-gray-400">{stats.completedPayments} pagos cobrados</p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs font-medium text-gray-500">Pendiente de Cobro</p>
+            <p className="text-xs font-medium text-gray-500">IVA Repercutido</p>
+            <p className="mt-1 text-2xl font-bold text-indigo-600">{fmt(stats.totalIva)}</p>
+            <p className="mt-1 text-xs text-gray-400">{IVA_RATE}% sobre base</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <p className="text-xs font-medium text-gray-500">Pendiente</p>
             <p className="mt-1 text-2xl font-bold text-yellow-600">{fmt(stats.pendingAmount)}</p>
             <p className="mt-1 text-xs text-gray-400">
               {stats.pendingTransfers} transferencias por verificar
             </p>
-          </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs font-medium text-gray-500">Pagos Totales</p>
-            <p className="mt-1 text-2xl font-bold text-gray-900">{stats.totalPayments}</p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <p className="text-xs font-medium text-gray-500">Reembolsos</p>
@@ -311,31 +350,19 @@ export default function FacturacionPage() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
-        <select
-          value={methodFilter}
-          onChange={(e) => setMethodFilter(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-        >
+        <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
           <option value="">Todos los métodos</option>
           <option value="STRIPE">Stripe</option>
           <option value="TRANSFERENCIA">Transferencia</option>
         </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-        >
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
           <option value="">Todos los estados</option>
           <option value="COMPLETED">Pagado</option>
           <option value="PENDING">Pendiente</option>
           <option value="FAILED">Fallido</option>
           <option value="REFUNDED">Reembolsado</option>
         </select>
-        <select
-          value={cohortFilter}
-          onChange={(e) => setCohortFilter(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-        >
+        <select value={cohortFilter} onChange={(e) => setCohortFilter(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
           <option value="">Todas las cohortes</option>
           {cohorts.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
@@ -364,7 +391,9 @@ export default function FacturacionPage() {
                 <th className="px-4 py-3">Cohorte</th>
                 <th className="px-4 py-3">Método</th>
                 <th className="px-4 py-3">Tipo</th>
-                <th className="px-4 py-3 text-right">Importe</th>
+                <th className="px-4 py-3 text-right">Base</th>
+                <th className="px-4 py-3 text-right">IVA</th>
+                <th className="px-4 py-3 text-right">Total</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Fecha</th>
                 <th className="px-4 py-3">Acciones</th>
@@ -384,7 +413,7 @@ export default function FacturacionPage() {
                           <img src={p.user.photo} alt="" className="h-8 w-8 rounded-full object-cover" />
                         ) : (
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
-                            {p.user.firstName[0]}{p.user.lastName[0]}
+                            {p.user.firstName?.[0]}{p.user.lastName?.[0]}
                           </div>
                         )}
                         <div>
@@ -406,8 +435,14 @@ export default function FacturacionPage() {
                         ? `Cuota ${p.installmentNumber}/${p.totalInstallments}`
                         : "Pago único"}
                     </td>
+                    <td className="px-4 py-3 text-right text-sm text-gray-600">
+                      {fmt(p.baseAmount, p.currency)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-gray-400">
+                      {fmt(p.ivaAmount, p.currency)}
+                    </td>
                     <td className="px-4 py-3 text-right">
-                      <span className="text-sm font-semibold text-gray-900">{fmt(p.amount, p.currency)}</span>
+                      <span className="text-sm font-semibold text-gray-900">{fmt(p.totalAmount, p.currency)}</span>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_CONFIG[p.status]?.color}`}>
@@ -442,38 +477,39 @@ export default function FacturacionPage() {
                     </td>
                   </tr>
 
-                  {/* Expanded */}
+                  {/* Expanded detail */}
                   {expandedId === p.id && (
                     <tr key={`${p.id}-detail`}>
-                      <td colSpan={8} className="bg-gray-50 px-6 py-4">
-                        <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+                      <td colSpan={10} className="bg-gray-50 px-6 py-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-5">
                           <div>
-                            <p className="text-xs font-medium text-gray-400">Datos fiscales</p>
+                            <p className="text-xs font-medium text-gray-400">Emisor</p>
+                            <p className="mt-1 font-medium text-gray-700">{EMISOR.nombre}</p>
+                            <p className="text-gray-500">NIF: {EMISOR.nif}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-gray-400">Datos fiscales cliente</p>
                             <p className="mt-1 text-gray-700">{p.user.fiscalName || "No registrado"}</p>
                             <p className="text-gray-500">NIF/CIF: {p.user.nifCif || "—"}</p>
                             <p className="text-gray-500">
-                              Tipo: {p.user.businessType === "AUTONOMO" ? "Autónomo" : p.user.businessType === "EMPRESA" ? "Empresa" : p.user.businessType === "PARTICULAR" ? "Particular" : "—"}
+                              {p.user.businessType === "AUTONOMO" ? "Autónomo" : p.user.businessType === "EMPRESA" ? "Empresa" : p.user.businessType === "PARTICULAR" ? "Particular" : "—"}
                             </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-gray-400">Desglose IVA</p>
+                            <p className="mt-1 text-gray-700">Base: {fmt(p.baseAmount)}</p>
+                            <p className="text-gray-500">IVA ({p.ivaRate}%): {fmt(p.ivaAmount)}</p>
+                            <p className="font-semibold text-gray-900">Total: {fmt(p.totalAmount)}</p>
                           </div>
                           <div>
                             <p className="text-xs font-medium text-gray-400">Nº Factura</p>
                             <p className="mt-1 text-gray-700">{p.invoiceNumber || "Sin asignar"}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-medium text-gray-400">
-                              {p.method === "STRIPE" ? "Stripe IDs" : "Método"}
-                            </p>
-                            {p.method === "STRIPE" ? (
+                            {p.method === "STRIPE" && (
                               <>
-                                <p className="mt-1 text-gray-500 text-xs">
-                                  PI: {p.stripePaymentIntentId ? `${p.stripePaymentIntentId.slice(0, 24)}...` : "—"}
-                                </p>
-                                <p className="text-gray-500 text-xs">
-                                  Session: {p.stripeSessionId ? `${p.stripeSessionId.slice(0, 24)}...` : "—"}
+                                <p className="mt-1 text-xs text-gray-400">
+                                  PI: {p.stripePaymentIntentId ? `${p.stripePaymentIntentId.slice(0, 20)}...` : "—"}
                                 </p>
                               </>
-                            ) : (
-                              <p className="mt-1 text-gray-700">Transferencia bancaria</p>
                             )}
                           </div>
                           <div>
@@ -494,7 +530,7 @@ export default function FacturacionPage() {
         </div>
       )}
 
-      {/* Create Payment Modal */}
+      {/* ─── Create Payment Modal ──────────────────────────────────── */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
@@ -509,41 +545,31 @@ export default function FacturacionPage() {
             </div>
 
             <form onSubmit={handleCreate} className="mt-4 space-y-4">
-              {/* Payment method selector */}
+              {/* Payment method */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Método de pago
-                </label>
+                <label className="mb-2 block text-sm font-medium text-gray-700">Método de pago</label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, method: "STRIPE" })}
                     className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-colors ${
-                      form.method === "STRIPE"
-                        ? "border-purple-500 bg-purple-50"
-                        : "border-gray-200 hover:border-gray-300"
+                      form.method === "STRIPE" ? "border-purple-500 bg-purple-50" : "border-gray-200 hover:border-gray-300"
                     }`}
                   >
                     <span className="text-2xl">💳</span>
                     <span className="text-sm font-medium text-gray-900">Link de Stripe</span>
-                    <span className="text-xs text-gray-500 text-center">
-                      Se genera un enlace de pago
-                    </span>
+                    <span className="text-xs text-gray-500 text-center">Se genera un enlace de pago</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, method: "TRANSFERENCIA" })}
                     className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-colors ${
-                      form.method === "TRANSFERENCIA"
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-gray-200 hover:border-gray-300"
+                      form.method === "TRANSFERENCIA" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
                     }`}
                   >
                     <span className="text-2xl">🏦</span>
                     <span className="text-sm font-medium text-gray-900">Transferencia</span>
-                    <span className="text-xs text-gray-500 text-center">
-                      Se verifica manualmente
-                    </span>
+                    <span className="text-xs text-gray-500 text-center">Se verifica manualmente</span>
                   </button>
                 </div>
               </div>
@@ -566,7 +592,7 @@ export default function FacturacionPage() {
                 </select>
               </div>
 
-              {/* Cohort (auto from student or manual) */}
+              {/* Cohort */}
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Cohorte</label>
                 <select
@@ -585,36 +611,48 @@ export default function FacturacionPage() {
                 </select>
               </div>
 
-              {/* Total amount */}
+              {/* Base amount (SIN IVA) */}
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Importe total (EUR) *
+                  Importe sin IVA (EUR) *
                 </label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
-                  value={form.totalAmount}
-                  onChange={(e) => setForm({ ...form, totalAmount: e.target.value })}
+                  value={form.baseAmount}
+                  onChange={(e) => setForm({ ...form, baseAmount: e.target.value })}
                   required
-                  placeholder="3000.00"
+                  placeholder="2479.34"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                 />
+                {formBase > 0 && (
+                  <div className="mt-2 rounded-lg bg-indigo-50 border border-indigo-100 p-2.5 text-sm">
+                    <div className="flex justify-between text-gray-600">
+                      <span>Base imponible</span>
+                      <span>{fmt(formBase)}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                      <span>IVA ({IVA_RATE}%)</span>
+                      <span>{fmt(formIva)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-gray-900 border-t border-indigo-200 mt-1 pt-1">
+                      <span>Total</span>
+                      <span>{fmt(formTotal)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Payment type: single or installments */}
+              {/* Payment type */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Forma de pago
-                </label>
+                <label className="mb-2 block text-sm font-medium text-gray-700">Forma de pago</label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, type: "SINGLE", installments: "1" })}
                     className={`rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-                      form.type === "SINGLE"
-                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                      form.type === "SINGLE" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-300"
                     }`}
                   >
                     Pago único
@@ -623,9 +661,7 @@ export default function FacturacionPage() {
                     type="button"
                     onClick={() => setForm({ ...form, type: "INSTALLMENT", installments: "3" })}
                     className={`rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-                      form.type === "INSTALLMENT"
-                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                      form.type === "INSTALLMENT" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-300"
                     }`}
                   >
                     Fraccionado
@@ -633,12 +669,10 @@ export default function FacturacionPage() {
                 </div>
               </div>
 
-              {/* Installment selector */}
+              {/* Installments */}
               {form.type === "INSTALLMENT" && (
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Número de cuotas
-                  </label>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">Número de cuotas</label>
                   <div className="flex gap-2">
                     {[2, 3, 4, 5, 6].map((n) => (
                       <button
@@ -646,31 +680,26 @@ export default function FacturacionPage() {
                         type="button"
                         onClick={() => setForm({ ...form, installments: String(n) })}
                         className={`flex-1 rounded-lg border-2 py-2 text-sm font-medium transition-colors ${
-                          form.installments === String(n)
-                            ? "border-blue-500 bg-blue-50 text-blue-700"
-                            : "border-gray-200 text-gray-600 hover:border-gray-300"
+                          form.installments === String(n) ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-300"
                         }`}
                       >
                         {n}x
                       </button>
                     ))}
                   </div>
-                  {form.totalAmount && (
-                    <p className="mt-2 text-sm text-gray-500">
-                      {parseInt(form.installments)} cuotas de{" "}
-                      <span className="font-semibold text-gray-700">
-                        {fmt(parseFloat(form.totalAmount) / parseInt(form.installments))}
-                      </span>
-                    </p>
+                  {formBase > 0 && (
+                    <div className="mt-2 text-sm text-gray-600">
+                      {numCuotas} cuotas de{" "}
+                      <span className="font-semibold text-gray-900">{fmt(perCuotaTotal)}</span>
+                      <span className="text-gray-400"> ({fmt(perCuotaBase)} + {fmt(perCuotaIva)} IVA)</span>
+                    </div>
                   )}
                 </div>
               )}
 
               {/* Invoice prefix */}
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Prefijo factura
-                </label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Prefijo factura</label>
                 <input
                   type="text"
                   value={form.invoicePrefix}
@@ -702,28 +731,22 @@ export default function FacturacionPage() {
               </div>
 
               {/* Summary */}
-              {form.userId && form.totalAmount && (
-                <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
-                  <p className="text-xs font-medium text-gray-500 mb-1">Resumen</p>
+              {form.userId && formBase > 0 && (
+                <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-1">
+                  <p className="text-xs font-medium text-gray-500">Resumen</p>
                   <p className="text-sm text-gray-700">
                     {form.method === "STRIPE" ? "💳 Link de Stripe" : "🏦 Transferencia bancaria"}
                     {" · "}
-                    {form.type === "INSTALLMENT" && parseInt(form.installments) > 1
-                      ? `${form.installments} cuotas de ${fmt(parseFloat(form.totalAmount) / parseInt(form.installments))}`
-                      : `Pago único de ${fmt(parseFloat(form.totalAmount))}`}
+                    {form.type === "INSTALLMENT" && numCuotas > 1
+                      ? `${numCuotas} cuotas de ${fmt(perCuotaTotal)}`
+                      : `Pago único de ${fmt(formTotal)}`}
                   </p>
-                  {form.method === "TRANSFERENCIA" && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Los pagos se crearán como &quot;Pendiente&quot; — podrás verificar cada
-                      transferencia cuando llegue
-                    </p>
-                  )}
-                  {form.method === "STRIPE" && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Los pagos se crearán como &quot;Pendiente&quot; — Stripe los marcará automáticamente
-                      cuando el alumno pague
-                    </p>
-                  )}
+                  <p className="text-xs text-gray-500">
+                    Base: {fmt(formBase)} + IVA {IVA_RATE}%: {fmt(formIva)} = <span className="font-semibold">{fmt(formTotal)}</span>
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Emisor: {EMISOR.nombre} · NIF: {EMISOR.nif}
+                  </p>
                 </div>
               )}
 
@@ -738,7 +761,7 @@ export default function FacturacionPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={creating || !form.userId || !form.totalAmount}
+                  disabled={creating || !form.userId || !form.baseAmount}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                 >
                   {creating

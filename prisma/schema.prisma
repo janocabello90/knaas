@@ -511,7 +511,10 @@ model Payment {
   userId                String        @map("user_id")
   cohortId              String?       @map("cohort_id")
   enrollmentId          String?       @map("enrollment_id")
-  amount                Float         // Amount in EUR
+  baseAmount            Float         @map("base_amount")      // Importe sin IVA
+  ivaRate               Float         @default(21) @map("iva_rate")  // % IVA (21 por defecto)
+  ivaAmount             Float         @map("iva_amount")       // Importe del IVA
+  totalAmount           Float         @map("total_amount")     // Total con IVA
   currency              String        @default("EUR")
   type                  PaymentType    @default(SINGLE)
   method                PaymentMethod  @default(STRIPE) @map("payment_method")

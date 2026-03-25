@@ -7,6 +7,15 @@ import {
   sendPaymentRefunded,
 } from "@/lib/emails/send";
 
+// IVA calculation: el importe se introduce SIN IVA, se añade el 21%
+const IVA_RATE = 21; // %
+
+function calculateIva(baseAmount: number) {
+  const ivaAmount = Math.round((baseAmount * IVA_RATE / 100) * 100) / 100;
+  const totalAmount = Math.round((baseAmount + ivaAmount) * 100) / 100;
+  return { baseAmount, ivaRate: IVA_RATE, ivaAmount, totalAmount };
+}
+
 async function getAuthAdmin() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -33,7 +42,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
-    const method = searchParams.get("method"); // STRIPE | TRANSFERENCIA
+    const method = searchParams.get("method");
     const cohortId = searchParams.get("cohortId");
     const search = searchParams.get("search");
 
@@ -56,7 +65,10 @@ export async function GET(request: NextRequest) {
       where,
       select: {
         id: true,
-        amount: true,
+        baseAmount: true,
+        ivaRate: true,
+        ivaAmount: true,
+        totalAmount: true,
         currency: true,
         type: true,
         method: true,
@@ -100,16 +112,22 @@ export async function GET(request: NextRequest) {
 
     // Stats
     const allPayments = await prisma.payment.findMany({
-      select: { amount: true, status: true, method: true },
+      select: { baseAmount: true, ivaAmount: true, totalAmount: true, status: true, method: true },
     });
 
     const stats = {
       totalRevenue: allPayments
         .filter((p) => p.status === "COMPLETED")
-        .reduce((sum, p) => sum + p.amount, 0),
+        .reduce((sum, p) => sum + p.totalAmount, 0),
+      totalBase: allPayments
+        .filter((p) => p.status === "COMPLETED")
+        .reduce((sum, p) => sum + p.baseAmount, 0),
+      totalIva: allPayments
+        .filter((p) => p.status === "COMPLETED")
+        .reduce((sum, p) => sum + p.ivaAmount, 0),
       pendingAmount: allPayments
         .filter((p) => p.status === "PENDING")
-        .reduce((sum, p) => sum + p.amount, 0),
+        .reduce((sum, p) => sum + p.totalAmount, 0),
       totalPayments: allPayments.length,
       completedPayments: allPayments.filter((p) => p.status === "COMPLETED").length,
       pendingTransfers: allPayments.filter(
@@ -117,7 +135,7 @@ export async function GET(request: NextRequest) {
       ).length,
       refundedAmount: allPayments
         .filter((p) => p.status === "REFUNDED")
-        .reduce((sum, p) => sum + p.amount, 0),
+        .reduce((sum, p) => sum + p.totalAmount, 0),
     };
 
     // Students for the create modal
@@ -146,6 +164,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST — Create payment(s): single or installments, Stripe link or transfer
+// baseAmount from the form is SIN IVA — se añade 21% encima
 export async function POST(request: NextRequest) {
   try {
     const admin = await getAuthAdmin();
@@ -158,7 +177,7 @@ export async function POST(request: NextRequest) {
       userId,
       cohortId,
       enrollmentId,
-      totalAmount,
+      baseAmount: totalBase, // Importe SIN IVA
       method,       // "STRIPE" | "TRANSFERENCIA"
       type,         // "SINGLE" | "INSTALLMENT"
       installments, // 1-6
@@ -166,23 +185,25 @@ export async function POST(request: NextRequest) {
       notes,
     } = body;
 
-    if (!userId || !totalAmount || !method) {
+    if (!userId || !totalBase || !method) {
       return NextResponse.json(
-        { error: "Faltan campos obligatorios (userId, totalAmount, method)" },
+        { error: "Faltan campos obligatorios (userId, baseAmount, method)" },
         { status: 400 }
       );
     }
 
     const numInstallments = type === "INSTALLMENT" && installments > 1 ? installments : 1;
-    const perInstallment = Math.round((totalAmount / numInstallments) * 100) / 100;
+    const perInstallmentBase = Math.round((totalBase / numInstallments) * 100) / 100;
 
     const createdPayments = [];
 
     for (let i = 1; i <= numInstallments; i++) {
       // Adjust last installment for rounding
-      const amount = i === numInstallments
-        ? Math.round((totalAmount - perInstallment * (numInstallments - 1)) * 100) / 100
-        : perInstallment;
+      const installmentBase = i === numInstallments
+        ? Math.round((totalBase - perInstallmentBase * (numInstallments - 1)) * 100) / 100
+        : perInstallmentBase;
+
+      const iva = calculateIva(installmentBase);
 
       const invoiceNumber = invoicePrefix
         ? `${invoicePrefix}-${String(i).padStart(2, "0")}`
@@ -193,7 +214,10 @@ export async function POST(request: NextRequest) {
           userId,
           cohortId: cohortId || null,
           enrollmentId: enrollmentId || null,
-          amount,
+          baseAmount: iva.baseAmount,
+          ivaRate: iva.ivaRate,
+          ivaAmount: iva.ivaAmount,
+          totalAmount: iva.totalAmount,
           currency: "EUR",
           type: numInstallments > 1 ? "INSTALLMENT" : "SINGLE",
           method,
@@ -219,11 +243,10 @@ export async function POST(request: NextRequest) {
         : null;
 
       if (student?.email) {
-        // Send email for first payment (or single payment)
         const firstPayment = createdPayments[0];
         sendTransferPending(student.email, {
           firstName: student.firstName || "Alumno/a",
-          amount: firstPayment.amount,
+          amount: firstPayment.totalAmount,
           currency: "EUR",
           cohortName: cohort?.name || undefined,
           invoiceNumber: firstPayment.invoiceNumber || undefined,
@@ -243,7 +266,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT — Verify a transfer payment (mark as COMPLETED) or generate Stripe link
+// PUT — Verify a transfer payment (mark as COMPLETED) or refund
 export async function PUT(request: NextRequest) {
   try {
     const admin = await getAuthAdmin();
@@ -253,7 +276,6 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json();
     const { paymentId, action } = body;
-    // action: "verify_transfer" | "mark_failed" | "refund"
 
     if (!paymentId || !action) {
       return NextResponse.json(
@@ -288,11 +310,10 @@ export async function PUT(request: NextRequest) {
               : "✅ Transferencia verificada por admin",
           },
         });
-        // Send verification email
         if (payment.user?.email) {
           sendTransferVerified(payment.user.email, {
             firstName: payment.user.firstName || "Alumno/a",
-            amount: payment.amount,
+            amount: payment.totalAmount,
             currency: payment.currency,
             cohortName: payment.cohort?.name || undefined,
             invoiceNumber: payment.invoiceNumber || undefined,
@@ -315,11 +336,10 @@ export async function PUT(request: NextRequest) {
             refundedAt: new Date(),
           },
         });
-        // Send refund email
         if (payment.user?.email) {
           sendPaymentRefunded(payment.user.email, {
             firstName: payment.user.firstName || "Alumno/a",
-            amount: payment.amount,
+            amount: payment.totalAmount,
             currency: payment.currency,
             invoiceNumber: payment.invoiceNumber || undefined,
           }).catch((err) => console.error("[Email] Failed to send refund email:", err));
