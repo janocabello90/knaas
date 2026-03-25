@@ -1,32 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import {
   Copy,
@@ -35,21 +9,26 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
-  Loader2,
+  Loader,
+  Link2,
+  UserPlus,
+  Users,
+  DollarSign,
+  Clock,
+  X,
 } from "lucide-react";
-import { toast } from "sonner";
 
 interface StudentData {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
-  avatarUrl?: string;
-  lastLogin?: Date;
+  photo?: string;
+  lastLogin?: string;
   enrollments: {
     id: string;
     status: string;
-    enrolledAt: Date;
+    enrolledAt: string;
     subscriptionType: string;
     cohort: {
       id: string;
@@ -79,12 +58,12 @@ interface InvitationData {
   email?: string;
   maxUses: number;
   usedCount: number;
-  expiresAt?: Date;
+  expiresAt?: string;
   isActive: boolean;
   price?: number;
   installmentsOk: boolean;
   createdBy: string;
-  createdAt: Date;
+  createdAt: string;
   creator: {
     firstName: string;
     lastName: string;
@@ -103,6 +82,8 @@ interface Cohort {
   name: string;
 }
 
+type TabKey = "alumnos" | "enlaces" | "crear";
+
 export default function AccesosPage() {
   const [students, setStudents] = useState<StudentData[]>([]);
   const [invitations, setInvitations] = useState<InvitationData[]>([]);
@@ -110,20 +91,21 @@ export default function AccesosPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>("alumnos");
 
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCohort, setFilterCohort] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
 
-  // Expanded student states
+  // Expanded student
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
 
   // Modal states
-  const [createLinkDialogOpen, setCreateLinkDialogOpen] = useState(false);
-  const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
+  const [showLinkModal, setShowLinkModal] = useState(false);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
   const [isEnrolling, setIsEnrolling] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Form states
   const [linkForm, setLinkForm] = useState({
@@ -145,45 +127,58 @@ export default function AccesosPage() {
   });
 
   // Fetch data
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await fetch("/api/admin/accesos");
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch access data");
-      }
-
+      if (!response.ok) throw new Error("Error al cargar datos de accesos");
       const data = await response.json();
-      setStudents(data.students);
-      setInvitations(data.invitations);
-      setStats(data.stats);
+      setStudents(data.students || []);
+      setInvitations(data.invitations || []);
+      setStats(data.stats || null);
 
-      // Extract unique cohorts from students and invitations
-      const cohortSet = new Set<string>();
-      data.students.forEach((s: StudentData) => {
+      // Extract unique cohorts
+      const cohortMap = new Map<string, Cohort>();
+      (data.students || []).forEach((s: StudentData) => {
         s.enrollments.forEach((e) => {
-          cohortSet.add(JSON.stringify(e.cohort));
+          cohortMap.set(e.cohort.id, e.cohort);
         });
       });
-      data.invitations.forEach((i: InvitationData) => {
-        cohortSet.add(JSON.stringify(i.cohort));
+      (data.invitations || []).forEach((i: InvitationData) => {
+        cohortMap.set(i.cohort.id, i.cohort);
       });
-
-      const uniqueCohorts = Array.from(cohortSet).map((c) => JSON.parse(c));
-      setCohorts(uniqueCohorts);
+      setCohorts(Array.from(cohortMap.values()));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      toast.error("Failed to load access data");
+      setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  // Also fetch cohorts from the cohortes API for the forms
+  const [allCohorts, setAllCohorts] = useState<Cohort[]>([]);
+  useEffect(() => {
+    fetch("/api/admin/cohortes")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.cohorts) {
+          setAllCohorts(
+            data.cohorts.map((c: { id: string; name: string }) => ({
+              id: c.id,
+              name: c.name,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const availableCohorts = allCohorts.length > 0 ? allCohorts : cohorts;
 
   // Filter students
   const filteredStudents = students.filter((student) => {
@@ -193,28 +188,26 @@ export default function AccesosPage() {
       student.lastName.toLowerCase().includes(query) ||
       student.email.toLowerCase().includes(query);
 
-    let matchesCohort = true;
-    if (filterCohort) {
-      matchesCohort = student.enrollments.some((e) => e.cohortId === filterCohort);
-    }
+    const matchesCohort = filterCohort
+      ? student.enrollments.some((e) => e.cohort.id === filterCohort)
+      : true;
 
-    let matchesStatus = true;
-    if (filterStatus) {
-      matchesStatus = student.enrollments.some((e) => e.status === filterStatus);
-    }
+    const matchesStatus = filterStatus
+      ? student.enrollments.some((e) => e.status === filterStatus)
+      : true;
 
     return matchesSearch && matchesCohort && matchesStatus;
   });
 
-  // Handle create invitation
+  // Create invitation link
   const handleCreateLink = async () => {
+    if (!linkForm.cohortId) {
+      setError("Selecciona una cohorte");
+      return;
+    }
     try {
-      if (!linkForm.cohortId) {
-        toast.error("Please select a cohort");
-        return;
-      }
-
       setIsCreatingLink(true);
+      setError(null);
       const response = await fetch("/api/admin/accesos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -228,13 +221,9 @@ export default function AccesosPage() {
           expiresAt: null,
         }),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to create invitation link");
-      }
-
-      toast.success("Invitation link created successfully");
-      setCreateLinkDialogOpen(false);
+      if (!response.ok) throw new Error("Error al crear enlace");
+      setSuccessMsg("Enlace creado correctamente");
+      setShowLinkModal(false);
       setLinkForm({
         type: "PAYMENT",
         cohortId: "",
@@ -244,35 +233,39 @@ export default function AccesosPage() {
         installmentsOk: false,
       });
       await fetchData();
+      setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create link");
+      setError(err instanceof Error ? err.message : "Error al crear enlace");
     } finally {
       setIsCreatingLink(false);
     }
   };
 
-  // Handle enroll student
-  const handleEnroll = async () => {
+  // Enroll student manually
+  const handleEnroll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (
+      !enrollForm.email ||
+      !enrollForm.firstName ||
+      !enrollForm.lastName ||
+      !enrollForm.cohortId
+    ) {
+      setError("Rellena todos los campos obligatorios");
+      return;
+    }
     try {
-      if (!enrollForm.email || !enrollForm.firstName || !enrollForm.lastName || !enrollForm.cohortId) {
-        toast.error("Please fill in all required fields");
-        return;
-      }
-
       setIsEnrolling(true);
+      setError(null);
       const response = await fetch("/api/admin/accesos/enroll", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(enrollForm),
       });
-
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to enroll student");
+        throw new Error(errorData.error || "Error al matricular alumno");
       }
-
-      toast.success("Student enrolled successfully");
-      setEnrollDialogOpen(false);
+      setSuccessMsg("Alumno matriculado correctamente");
       setEnrollForm({
         email: "",
         firstName: "",
@@ -282,8 +275,9 @@ export default function AccesosPage() {
         paymentMethod: "",
       });
       await fetchData();
+      setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to enroll student");
+      setError(err instanceof Error ? err.message : "Error al matricular");
     } finally {
       setIsEnrolling(false);
     }
@@ -292,680 +286,712 @@ export default function AccesosPage() {
   // Copy to clipboard
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard");
+    setSuccessMsg("Copiado al portapapeles");
+    setTimeout(() => setSuccessMsg(null), 2000);
   };
 
-  // Get initials for avatar
+  // Get initials
   const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName[0]}${lastName[0]}`.toUpperCase();
+    return `${(firstName || "?")[0]}${(lastName || "?")[0]}`.toUpperCase();
   };
 
-  // Get status badge color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "ACTIVE":
-        return "bg-green-100 text-green-800";
-      case "PENDING":
-        return "bg-yellow-100 text-yellow-800";
-      case "PAUSED":
-        return "bg-orange-100 text-orange-800";
-      case "CANCELLED":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
+  // Status colors
+  const statusColors: Record<string, string> = {
+    ACTIVE: "bg-green-100 text-green-800",
+    PENDING: "bg-yellow-100 text-yellow-800",
+    PAUSED: "bg-orange-100 text-orange-800",
+    CANCELLED: "bg-red-100 text-red-800",
+  };
+
+  const statusLabels: Record<string, string> = {
+    ACTIVE: "Activo",
+    PENDING: "Pendiente",
+    PAUSED: "Pausado",
+    CANCELLED: "Cancelado",
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex items-center justify-center py-24">
+        <Loader className="animate-spin text-blue-600" size={32} />
       </div>
     );
   }
 
+  const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+    { key: "alumnos", label: "Alumnos", icon: <Users size={16} /> },
+    { key: "enlaces", label: "Enlaces", icon: <Link2 size={16} /> },
+    { key: "crear", label: "Crear Acceso", icon: <UserPlus size={16} /> },
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-gray-50 p-8">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Gestión de Accesos</h1>
-        <p className="text-muted-foreground mt-2">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">
+          Gestión de Accesos
+        </h1>
+        <p className="mt-2 text-gray-600">
           Administra estudiantes, enlaces de invitación y accesos
         </p>
       </div>
 
-      {/* Stats */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total de Estudiantes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalStudents}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Estudiantes Activos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {stats.active}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Pendientes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">
-                {stats.pending}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Ingresos Totales
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                €{stats.totalRevenue.toFixed(2)}
-              </div>
-            </CardContent>
-          </Card>
+      {/* Error / Success alerts */}
+      {error && (
+        <div className="mb-6 flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <AlertCircle size={20} />
+          <p className="flex-1">{error}</p>
+          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+      {successMsg && (
+        <div className="mb-6 flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-green-800">
+          <p>{successMsg}</p>
         </div>
       )}
 
-      {/* Main Tabs */}
-      <Tabs defaultValue="alumnos" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="alumnos">Alumnos</TabsTrigger>
-          <TabsTrigger value="enlaces">Enlaces</TabsTrigger>
-          <TabsTrigger value="crear">Crear Acceso</TabsTrigger>
-        </TabsList>
+      {/* Stats */}
+      {stats && (
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Total Alumnos" value={stats.totalStudents} icon={<Users size={24} />} color="blue" />
+          <StatCard label="Activos" value={stats.active} icon={<Eye size={24} />} color="green" />
+          <StatCard label="Pendientes" value={stats.pending} icon={<Clock size={24} />} color="yellow" />
+          <StatCard label="Ingresos" value={`€${(stats.totalRevenue || 0).toFixed(2)}`} icon={<DollarSign size={24} />} color="purple" />
+        </div>
+      )}
 
-        {/* Tab 1: Alumnos */}
-        <TabsContent value="alumnos" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Estudiantes</CardTitle>
-              <CardDescription>
-                Gestiona la información y estatus de los estudiantes
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Search and Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar por nombre o email..."
-                    className="pl-8"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
+      {/* Tabs */}
+      <div className="mb-6 flex gap-1 rounded-lg bg-gray-200 p-1">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-colors",
+              activeTab === tab.key
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            )}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-                <Select value={filterCohort} onValueChange={setFilterCohort}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filtrar por cohorte" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Todas las cohortes</SelectItem>
-                    {cohorts.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+      {/* Tab: Alumnos */}
+      {activeTab === "alumnos" && (
+        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-200 p-6">
+            <h2 className="text-lg font-bold text-gray-900">Estudiantes</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Gestiona la información y estatus de los estudiantes
+            </p>
 
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filtrar por estatus" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Todos los estatus</SelectItem>
-                    <SelectItem value="ACTIVE">Activo</SelectItem>
-                    <SelectItem value="PENDING">Pendiente</SelectItem>
-                    <SelectItem value="PAUSED">Pausado</SelectItem>
-                    <SelectItem value="CANCELLED">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
+            {/* Filters */}
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre o email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-4 text-sm text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 outline-none"
+                />
               </div>
+              <select
+                value={filterCohort}
+                onChange={(e) => setFilterCohort(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 focus:border-blue-500 outline-none"
+              >
+                <option value="">Todas las cohortes</option>
+                {availableCohorts.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 focus:border-blue-500 outline-none"
+              >
+                <option value="">Todos los estatus</option>
+                <option value="ACTIVE">Activo</option>
+                <option value="PENDING">Pendiente</option>
+                <option value="PAUSED">Pausado</option>
+                <option value="CANCELLED">Cancelado</option>
+              </select>
+            </div>
+          </div>
 
-              {/* Students List */}
-              <div className="space-y-2">
-                {filteredStudents.length === 0 ? (
-                  <div className="flex items-center justify-center py-8 text-muted-foreground">
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    No se encontraron estudiantes
-                  </div>
-                ) : (
-                  filteredStudents.map((student) => (
-                    <div key={student.id} className="border rounded-lg">
-                      {/* Main Row */}
-                      <button
-                        onClick={() =>
-                          setExpandedStudent(
-                            expandedStudent === student.id ? null : student.id
-                          )
-                        }
-                        className="w-full text-left p-4 hover:bg-muted/50 transition-colors flex items-center gap-4"
-                      >
-                        {/* Avatar */}
-                        <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center font-semibold text-sm">
-                          {getInitials(student.firstName, student.lastName)}
-                        </div>
-
-                        {/* Info */}
-                        <div className="flex-grow min-w-0">
-                          <div className="font-semibold">
-                            {student.firstName} {student.lastName}
-                          </div>
-                          <div className="text-sm text-muted-foreground truncate">
-                            {student.email}
-                          </div>
-                        </div>
-
-                        {/* Cohort */}
-                        {student.enrollments[0] && (
-                          <div className="flex-shrink-0 text-sm">
-                            {student.enrollments[0].cohort.name}
-                          </div>
-                        )}
-
-                        {/* Status Badge */}
-                        {student.enrollments[0] && (
-                          <Badge
-                            className={getStatusColor(
-                              student.enrollments[0].status
-                            )}
-                          >
-                            {student.enrollments[0].status}
-                          </Badge>
-                        )}
-
-                        {/* Subscription Type */}
-                        {student.enrollments[0] && (
-                          <Badge variant="outline">
-                            {student.enrollments[0].subscriptionType}
-                          </Badge>
-                        )}
-
-                        {/* Payment Status */}
-                        <div className="flex-shrink-0 text-sm">
-                          <span className="font-medium">
-                            €{student.paymentSummary.totalPaid.toFixed(2)}
-                          </span>
-                          {student.paymentSummary.pending > 0 && (
-                            <span className="text-red-600 ml-2">
-                              (€{student.paymentSummary.pending.toFixed(2)} pendiente)
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Chevron */}
-                        <div className="flex-shrink-0">
-                          {expandedStudent === student.id ? (
-                            <EyeOff className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <Eye className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </div>
-                      </button>
-
-                      {/* Expanded Details */}
-                      {expandedStudent === student.id && (
-                        <div className="border-t bg-muted/30 p-4 space-y-4">
-                          {/* Billing Info */}
-                          {student.billingInfo && (
-                            <div className="space-y-2">
-                              <h4 className="font-semibold text-sm">
-                                Información Fiscal
-                              </h4>
-                              <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                  <span className="text-muted-foreground">
-                                    NIF/CIF:
-                                  </span>
-                                  <div>{student.billingInfo.nifCif}</div>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">
-                                    Nombre Fiscal:
-                                  </span>
-                                  <div>{student.billingInfo.fiscalName}</div>
-                                </div>
-                                <div className="col-span-2">
-                                  <span className="text-muted-foreground">
-                                    Tipo de Negocio:
-                                  </span>
-                                  <div>{student.billingInfo.businessType}</div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Enrollment Info */}
-                          <div className="space-y-2">
-                            <h4 className="font-semibold text-sm">
-                              Información de Matrícula
-                            </h4>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">
-                                  Inscrito:
-                                </span>
-                                <div>
-                                  {new Date(
-                                    student.enrollments[0].enrolledAt
-                                  ).toLocaleDateString("es-ES")}
-                                </div>
-                              </div>
-                              {student.lastLogin && (
-                                <div>
-                                  <span className="text-muted-foreground">
-                                    Último acceso:
-                                  </span>
-                                  <div>
-                                    {new Date(student.lastLogin).toLocaleDateString(
-                                      "es-ES"
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex gap-2 pt-2">
-                            <Button size="sm" variant="outline">
-                              Activar
-                            </Button>
-                            <Button size="sm" variant="outline">
-                              Pausar
-                            </Button>
-                            <Button size="sm" variant="outline" className="text-destructive">
-                              Cancelar
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
+          <div className="divide-y divide-gray-100">
+            {filteredStudents.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-gray-500">
+                <AlertCircle size={16} />
+                No se encontraron estudiantes
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tab 2: Enlaces */}
-        <TabsContent value="enlaces" className="space-y-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Enlaces de Invitación</CardTitle>
-                <CardDescription>
-                  Crea y gestiona enlaces para que los estudiantes se registren
-                </CardDescription>
-              </div>
-              <Dialog open={createLinkDialogOpen} onOpenChange={setCreateLinkDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Crear Enlace
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Crear Nuevo Enlace de Invitación</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Tipo
-                      </label>
-                      <Select
-                        value={linkForm.type}
-                        onValueChange={(value) =>
-                          setLinkForm({ ...linkForm, type: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="FREE">Gratuito</SelectItem>
-                          <SelectItem value="PAYMENT">De Pago</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Cohorte
-                      </label>
-                      <Select
-                        value={linkForm.cohortId}
-                        onValueChange={(value) =>
-                          setLinkForm({ ...linkForm, cohortId: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una cohorte" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {cohorts.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Email (opcional)
-                      </label>
-                      <Input
-                        type="email"
-                        placeholder="usuario@ejemplo.com"
-                        value={linkForm.email}
-                        onChange={(e) =>
-                          setLinkForm({ ...linkForm, email: e.target.value })
-                        }
+            ) : (
+              filteredStudents.map((student) => (
+                <div key={student.id}>
+                  {/* Main row */}
+                  <button
+                    onClick={() =>
+                      setExpandedStudent(
+                        expandedStudent === student.id ? null : student.id
+                      )
+                    }
+                    className="flex w-full items-center gap-4 px-6 py-4 text-left hover:bg-gray-50 transition-colors"
+                  >
+                    {/* Avatar */}
+                    {student.photo ? (
+                      <img
+                        src={student.photo}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-full object-cover"
                       />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Máximo de Usos
-                      </label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={linkForm.maxUses}
-                        onChange={(e) =>
-                          setLinkForm({ ...linkForm, maxUses: e.target.value })
-                        }
-                      />
-                    </div>
-
-                    {linkForm.type === "PAYMENT" && (
-                      <div>
-                        <label className="block text-sm font-medium mb-2">
-                          Precio (€)
-                        </label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          value={linkForm.price}
-                          onChange={(e) =>
-                            setLinkForm({ ...linkForm, price: e.target.value })
-                          }
-                        />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
+                        {getInitials(student.firstName, student.lastName)}
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="installments"
-                        checked={linkForm.installmentsOk}
-                        onChange={(e) =>
-                          setLinkForm({
-                            ...linkForm,
-                            installmentsOk: e.target.checked,
-                          })
-                        }
-                      />
-                      <label htmlFor="installments" className="text-sm font-medium">
-                        Permitir pagos en cuotas
-                      </label>
+                    {/* Info */}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-gray-900">
+                        {student.firstName} {student.lastName}
+                      </p>
+                      <p className="truncate text-sm text-gray-500">
+                        {student.email}
+                      </p>
                     </div>
 
-                    <Button
-                      onClick={handleCreateLink}
-                      disabled={isCreatingLink}
-                      className="w-full"
-                    >
-                      {isCreatingLink && (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {/* Cohort */}
+                    {student.enrollments[0] && (
+                      <span className="hidden text-sm text-gray-600 md:block">
+                        {student.enrollments[0].cohort.name}
+                      </span>
+                    )}
+
+                    {/* Status */}
+                    {student.enrollments[0] && (
+                      <span
+                        className={cn(
+                          "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                          statusColors[student.enrollments[0].status] ||
+                            "bg-gray-100 text-gray-800"
+                        )}
+                      >
+                        {statusLabels[student.enrollments[0].status] ||
+                          student.enrollments[0].status}
+                      </span>
+                    )}
+
+                    {/* Subscription type */}
+                    {student.enrollments[0] && (
+                      <span className="hidden rounded-full border border-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-600 lg:block">
+                        {student.enrollments[0].subscriptionType}
+                      </span>
+                    )}
+
+                    {/* Payment */}
+                    <div className="hidden shrink-0 text-right text-sm lg:block">
+                      <span className="font-medium text-gray-900">
+                        €{(student.paymentSummary?.totalPaid || 0).toFixed(2)}
+                      </span>
+                      {(student.paymentSummary?.pending || 0) > 0 && (
+                        <span className="ml-1 text-red-600">
+                          (€{student.paymentSummary.pending.toFixed(2)} pdte)
+                        </span>
                       )}
-                      Crear Enlace
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {invitations.length === 0 ? (
-                  <div className="flex items-center justify-center py-8 text-muted-foreground">
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    No hay enlaces de invitación aún
-                  </div>
-                ) : (
-                  invitations.map((inv) => (
-                    <div
-                      key={inv.id}
-                      className="border rounded-lg p-4 flex items-center justify-between gap-4 hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex-grow min-w-0 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <code className="bg-muted px-2 py-1 rounded text-sm font-mono">
-                            {inv.code}
-                          </code>
-                          <Badge
-                            className={inv.type === "PAYMENT" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"}
-                          >
-                            {inv.type === "PAYMENT" ? "De Pago" : "Gratuito"}
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {inv.cohort.name}
-                          </span>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Usos: {inv.usedCount}/{inv.maxUses}
-                          {inv.price && ` • €${inv.price.toFixed(2)}`}
-                          {inv.expiresAt && ` • Expira: ${new Date(inv.expiresAt).toLocaleDateString("es-ES")}`}
+                    </div>
+
+                    {/* Toggle icon */}
+                    {expandedStudent === student.id ? (
+                      <EyeOff size={16} className="shrink-0 text-gray-400" />
+                    ) : (
+                      <Eye size={16} className="shrink-0 text-gray-400" />
+                    )}
+                  </button>
+
+                  {/* Expanded details */}
+                  {expandedStudent === student.id && (
+                    <div className="border-t border-gray-100 bg-gray-50 px-6 py-4">
+                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        {/* Billing */}
+                        {student.billingInfo && (
+                          <div>
+                            <h4 className="mb-2 text-sm font-semibold text-gray-700">
+                              Información Fiscal
+                            </h4>
+                            <div className="space-y-1 text-sm">
+                              <p>
+                                <span className="text-gray-500">NIF/CIF: </span>
+                                {student.billingInfo.nifCif || "—"}
+                              </p>
+                              <p>
+                                <span className="text-gray-500">Nombre Fiscal: </span>
+                                {student.billingInfo.fiscalName || "—"}
+                              </p>
+                              <p>
+                                <span className="text-gray-500">Tipo: </span>
+                                {student.billingInfo.businessType || "—"}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Enrollment */}
+                        <div>
+                          <h4 className="mb-2 text-sm font-semibold text-gray-700">
+                            Matrícula
+                          </h4>
+                          <div className="space-y-1 text-sm">
+                            {student.enrollments[0] && (
+                              <p>
+                                <span className="text-gray-500">Inscrito: </span>
+                                {new Date(
+                                  student.enrollments[0].enrolledAt
+                                ).toLocaleDateString("es-ES")}
+                              </p>
+                            )}
+                            {student.lastLogin && (
+                              <p>
+                                <span className="text-gray-500">Último acceso: </span>
+                                {new Date(student.lastLogin).toLocaleDateString(
+                                  "es-ES"
+                                )}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            copyToClipboard(
-                              `${window.location.origin}/register?code=${inv.code}`
-                            )
-                          }
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        <Badge
-                          variant="outline"
-                          className={
-                            inv.isActive ? "bg-green-50" : "bg-red-50"
-                          }
-                        >
-                          {inv.isActive ? "Activo" : "Inactivo"}
-                        </Badge>
+                      {/* Actions */}
+                      <div className="mt-4 flex gap-2">
+                        <button className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                          Activar
+                        </button>
+                        <button className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                          Pausar
+                        </button>
+                        <button className="rounded-lg border border-red-200 bg-white px-4 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
+                          Cancelar
+                        </button>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tab 3: Crear Acceso */}
-        <TabsContent value="crear" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Crear Acceso Manual</CardTitle>
-              <CardDescription>
-                Registra un nuevo estudiante manualmente en el sistema
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="max-w-2xl space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Email *
-                    </label>
-                    <Input
-                      type="email"
-                      placeholder="usuario@ejemplo.com"
-                      value={enrollForm.email}
-                      onChange={(e) =>
-                        setEnrollForm({
-                          ...enrollForm,
-                          email: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Nombre *
-                    </label>
-                    <Input
-                      placeholder="Juan"
-                      value={enrollForm.firstName}
-                      onChange={(e) =>
-                        setEnrollForm({
-                          ...enrollForm,
-                          firstName: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Apellido *
-                    </label>
-                    <Input
-                      placeholder="Pérez"
-                      value={enrollForm.lastName}
-                      onChange={(e) =>
-                        setEnrollForm({
-                          ...enrollForm,
-                          lastName: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Cohorte *
-                    </label>
-                    <Select
-                      value={enrollForm.cohortId}
-                      onValueChange={(value) =>
-                        setEnrollForm({
-                          ...enrollForm,
-                          cohortId: value,
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona una cohorte" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {cohorts.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Tipo de Suscripción *
-                    </label>
-                    <Select
-                      value={enrollForm.subscriptionType}
-                      onValueChange={(value) =>
-                        setEnrollForm({
-                          ...enrollForm,
-                          subscriptionType: value,
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="BECA">Beca</SelectItem>
-                        <SelectItem value="NORMAL">Normal</SelectItem>
-                        <SelectItem value="INVITACION">Invitación</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Método de Pago
-                    </label>
-                    <Input
-                      placeholder="Ej: Tarjeta, Transferencia"
-                      value={enrollForm.paymentMethod}
-                      onChange={(e) =>
-                        setEnrollForm({
-                          ...enrollForm,
-                          paymentMethod: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  onClick={handleEnroll}
-                  disabled={isEnrolling}
-                  className="w-full"
-                  size="lg"
-                >
-                  {isEnrolling && (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   )}
-                  Crear Estudiante
-                </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Enlaces */}
+      {activeTab === "enlaces" && (
+        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-200 p-6">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">
+                Enlaces de Invitación
+              </h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Crea y gestiona enlaces para que los estudiantes se registren
+              </p>
+            </div>
+            <button
+              onClick={() => setShowLinkModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            >
+              <Plus size={16} />
+              Crear Enlace
+            </button>
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            {invitations.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-gray-500">
+                <AlertCircle size={16} />
+                No hay enlaces de invitación aún
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            ) : (
+              invitations.map((inv) => (
+                <div
+                  key={inv.id}
+                  className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <code className="rounded bg-gray-100 px-2 py-0.5 text-sm font-mono text-gray-800">
+                        {inv.code}
+                      </code>
+                      <span
+                        className={cn(
+                          "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                          inv.type === "PAYMENT"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-green-100 text-green-800"
+                        )}
+                      >
+                        {inv.type === "PAYMENT" ? "De Pago" : "Gratuito"}
+                      </span>
+                      <span className="text-sm text-gray-600">
+                        {inv.cohort.name}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      Usos: {inv.usedCount}/{inv.maxUses}
+                      {inv.price != null && inv.price > 0 && ` · €${inv.price.toFixed(2)}`}
+                      {inv.email && ` · ${inv.email}`}
+                      {inv.expiresAt &&
+                        ` · Expira: ${new Date(inv.expiresAt).toLocaleDateString("es-ES")}`}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      copyToClipboard(
+                        `${window.location.origin}/register?code=${inv.code}`
+                      )
+                    }
+                    className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                    title="Copiar enlace"
+                  >
+                    <Copy size={16} />
+                  </button>
+
+                  <span
+                    className={cn(
+                      "rounded-full border px-2.5 py-0.5 text-xs font-semibold",
+                      inv.isActive
+                        ? "border-green-200 bg-green-50 text-green-700"
+                        : "border-red-200 bg-red-50 text-red-700"
+                    )}
+                  >
+                    {inv.isActive ? "Activo" : "Inactivo"}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Crear Acceso */}
+      {activeTab === "crear" && (
+        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-200 p-6">
+            <h2 className="text-lg font-bold text-gray-900">
+              Crear Acceso Manual
+            </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Registra un nuevo estudiante manualmente en el sistema
+            </p>
+          </div>
+
+          <form onSubmit={handleEnroll} className="max-w-2xl p-6">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="usuario@ejemplo.com"
+                    value={enrollForm.email}
+                    onChange={(e) =>
+                      setEnrollForm({ ...enrollForm, email: e.target.value })
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-blue-500 outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Nombre *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Juan"
+                    value={enrollForm.firstName}
+                    onChange={(e) =>
+                      setEnrollForm({ ...enrollForm, firstName: e.target.value })
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-blue-500 outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Apellido *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Pérez"
+                    value={enrollForm.lastName}
+                    onChange={(e) =>
+                      setEnrollForm({ ...enrollForm, lastName: e.target.value })
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-blue-500 outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Cohorte *
+                  </label>
+                  <select
+                    value={enrollForm.cohortId}
+                    onChange={(e) =>
+                      setEnrollForm({ ...enrollForm, cohortId: e.target.value })
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 focus:border-blue-500 outline-none"
+                    required
+                  >
+                    <option value="">Selecciona una cohorte</option>
+                    {availableCohorts.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Tipo de Suscripción *
+                  </label>
+                  <select
+                    value={enrollForm.subscriptionType}
+                    onChange={(e) =>
+                      setEnrollForm({
+                        ...enrollForm,
+                        subscriptionType: e.target.value,
+                      })
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 focus:border-blue-500 outline-none"
+                  >
+                    <option value="BECA">Beca</option>
+                    <option value="NORMAL">Normal</option>
+                    <option value="INVITACION">Invitación</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Método de Pago
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Tarjeta, Transferencia"
+                    value={enrollForm.paymentMethod}
+                    onChange={(e) =>
+                      setEnrollForm({
+                        ...enrollForm,
+                        paymentMethod: e.target.value,
+                      })
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isEnrolling}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isEnrolling && <Loader size={16} className="animate-spin" />}
+                Crear Estudiante
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Create Link Modal */}
+      {showLinkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="relative w-full max-w-lg rounded-lg bg-white shadow-xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+              <h3 className="text-lg font-bold text-gray-900">
+                Crear Enlace de Invitación
+              </h3>
+              <button
+                onClick={() => setShowLinkModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <div className="space-y-4 px-6 py-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                  Tipo
+                </label>
+                <select
+                  value={linkForm.type}
+                  onChange={(e) =>
+                    setLinkForm({ ...linkForm, type: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 focus:border-blue-500 outline-none"
+                >
+                  <option value="FREE">Gratuito</option>
+                  <option value="PAYMENT">De Pago</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                  Cohorte
+                </label>
+                <select
+                  value={linkForm.cohortId}
+                  onChange={(e) =>
+                    setLinkForm({ ...linkForm, cohortId: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 focus:border-blue-500 outline-none"
+                >
+                  <option value="">Selecciona una cohorte</option>
+                  {availableCohorts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                  Email (opcional — para enlace personalizado)
+                </label>
+                <input
+                  type="email"
+                  placeholder="usuario@ejemplo.com"
+                  value={linkForm.email}
+                  onChange={(e) =>
+                    setLinkForm({ ...linkForm, email: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                  Máximo de Usos
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={linkForm.maxUses}
+                  onChange={(e) =>
+                    setLinkForm({ ...linkForm, maxUses: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              {linkForm.type === "PAYMENT" && (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Precio (€)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={linkForm.price}
+                    onChange={(e) =>
+                      setLinkForm({ ...linkForm, price: e.target.value })
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="installments"
+                  checked={linkForm.installmentsOk}
+                  onChange={(e) =>
+                    setLinkForm({
+                      ...linkForm,
+                      installmentsOk: e.target.checked,
+                    })
+                  }
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label
+                  htmlFor="installments"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Permitir pagos en cuotas
+                </label>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-3 border-t border-gray-200 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setShowLinkModal(false)}
+                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateLink}
+                disabled={isCreatingLink}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCreatingLink && <Loader size={16} className="animate-spin" />}
+                Crear Enlace
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Stats card component
+interface StatCardProps {
+  label: string;
+  value: string | number;
+  icon: React.ReactNode;
+  color: "blue" | "green" | "yellow" | "purple";
+}
+
+function StatCard({ label, value, icon, color }: StatCardProps) {
+  const colorClasses: Record<string, string> = {
+    blue: "bg-blue-50 text-blue-600",
+    green: "bg-green-50 text-green-600",
+    yellow: "bg-yellow-50 text-yellow-600",
+    purple: "bg-purple-50 text-purple-600",
+  };
+
+  return (
+    <div className="rounded-lg border border-gray-100 bg-white p-6 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-600">{label}</p>
+          <p className="mt-2 text-2xl font-bold text-gray-900">{value}</p>
+        </div>
+        <div className={cn("rounded-lg p-3", colorClasses[color])}>{icon}</div>
+      </div>
     </div>
   );
 }
