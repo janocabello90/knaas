@@ -85,6 +85,11 @@ enum PaymentType {
   INSTALLMENT
 }
 
+enum PaymentMethod {
+  STRIPE
+  TRANSFERENCIA
+}
+
 enum InvitationLinkType {
   PAYMENT   // Requires Stripe payment
   FREE      // Direct access (beca, equipo)
@@ -508,9 +513,10 @@ model Payment {
   enrollmentId          String?       @map("enrollment_id")
   amount                Float         // Amount in EUR
   currency              String        @default("EUR")
-  type                  PaymentType   @default(SINGLE)
-  status                PaymentStatus @default(PENDING)
-  installmentNumber     Int?          @map("installment_number")  // 1, 2, 3...
+  type                  PaymentType    @default(SINGLE)
+  method                PaymentMethod  @default(STRIPE) @map("payment_method")
+  status                PaymentStatus  @default(PENDING)
+  installmentNumber     Int?           @map("installment_number")  // 1, 2, 3...
   totalInstallments     Int?          @map("total_installments")
   stripePaymentIntentId String?       @map("stripe_payment_intent_id")
   stripeSessionId       String?       @map("stripe_session_id")

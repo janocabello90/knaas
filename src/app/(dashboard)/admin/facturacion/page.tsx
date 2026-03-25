@@ -7,6 +7,7 @@ type Payment = {
   amount: number;
   currency: string;
   type: "SINGLE" | "INSTALLMENT";
+  method: "STRIPE" | "TRANSFERENCIA";
   status: "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
   installmentNumber: number | null;
   totalInstallments: number | null;
@@ -32,44 +33,41 @@ type Payment = {
 };
 
 type CohortOption = { id: string; name: string };
+type StudentOption = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  enrollments: { id: string; cohort: { id: string; name: string } }[];
+};
 
 type Stats = {
   totalRevenue: number;
   pendingAmount: number;
   totalPayments: number;
   completedPayments: number;
-  failedPayments: number;
+  pendingTransfers: number;
   refundedAmount: number;
 };
 
-type StudentOption = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-};
-
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   COMPLETED: { label: "Pagado", color: "bg-green-100 text-green-700" },
   PENDING: { label: "Pendiente", color: "bg-yellow-100 text-yellow-700" },
   FAILED: { label: "Fallido", color: "bg-red-100 text-red-700" },
   REFUNDED: { label: "Reembolsado", color: "bg-gray-100 text-gray-600" },
 };
 
-const TYPE_LABELS: Record<string, string> = {
-  SINGLE: "Pago único",
-  INSTALLMENT: "Cuota",
+const METHOD_CONFIG: Record<string, { label: string; color: string }> = {
+  STRIPE: { label: "Stripe", color: "bg-purple-100 text-purple-700" },
+  TRANSFERENCIA: { label: "Transferencia", color: "bg-blue-100 text-blue-700" },
 };
 
-function formatCurrency(amount: number, currency = "EUR"): string {
-  return new Intl.NumberFormat("es-ES", {
-    style: "currency",
-    currency,
-  }).format(amount);
+function fmt(amount: number, currency = "EUR"): string {
+  return new Intl.NumberFormat("es-ES", { style: "currency", currency }).format(amount);
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("es-ES", {
+function fmtDate(d: string): string {
+  return new Date(d).toLocaleDateString("es-ES", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -79,39 +77,45 @@ function formatDate(dateStr: string): string {
 export default function FacturacionPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [cohorts, setCohorts] = useState<CohortOption[]>([]);
+  const [students, setStudents] = useState<StudentOption[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("");
+  const [methodFilter, setMethodFilter] = useState("");
   const [cohortFilter, setCohortFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Create payment modal
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [students, setStudents] = useState<StudentOption[]>([]);
+  // Create modal
+  const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [createForm, setCreateForm] = useState({
+  const [form, setForm] = useState({
     userId: "",
     cohortId: "",
-    amount: "",
-    type: "SINGLE",
-    status: "COMPLETED",
-    installmentNumber: "",
-    totalInstallments: "",
-    invoiceNumber: "",
+    enrollmentId: "",
+    totalAmount: "",
+    method: "STRIPE" as "STRIPE" | "TRANSFERENCIA",
+    type: "SINGLE" as "SINGLE" | "INSTALLMENT",
+    installments: "1",
+    invoicePrefix: "",
     notes: "",
   });
 
   // Expanded row
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const fetchPayments = useCallback(async () => {
+  // Action loading
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
       if (statusFilter) params.set("status", statusFilter);
+      if (methodFilter) params.set("method", methodFilter);
       if (cohortFilter) params.set("cohortId", cohortFilter);
       if (searchQuery) params.set("search", searchQuery);
 
@@ -120,42 +124,36 @@ export default function FacturacionPage() {
       const data = await res.json();
       setPayments(data.payments);
       setCohorts(data.cohorts);
+      setStudents(data.students || []);
       setStats(data.stats);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, cohortFilter, searchQuery]);
+  }, [statusFilter, methodFilter, cohortFilter, searchQuery]);
 
   useEffect(() => {
-    fetchPayments();
-  }, [fetchPayments]);
+    fetchData();
+  }, [fetchData]);
 
-  // Fetch students for the create modal
+  // When student changes, auto-set cohort from their enrollment
   useEffect(() => {
-    if (showCreateModal && students.length === 0) {
-      fetch("/api/admin/accesos")
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.students) {
-            setStudents(
-              data.students.map((s: { id: string; firstName: string; lastName: string; email: string }) => ({
-                id: s.id,
-                firstName: s.firstName,
-                lastName: s.lastName,
-                email: s.email,
-              }))
-            );
-          }
-        })
-        .catch(() => {});
+    if (form.userId) {
+      const student = students.find((s) => s.id === form.userId);
+      if (student?.enrollments?.length === 1) {
+        setForm((f) => ({
+          ...f,
+          cohortId: student.enrollments[0].cohort.id,
+          enrollmentId: student.enrollments[0].id,
+        }));
+      }
     }
-  }, [showCreateModal, students.length]);
+  }, [form.userId, students]);
 
-  const handleCreatePayment = async (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createForm.userId || !createForm.amount) return;
+    if (!form.userId || !form.totalAmount) return;
 
     try {
       setCreating(true);
@@ -163,35 +161,87 @@ export default function FacturacionPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...createForm,
-          amount: parseFloat(createForm.amount),
+          userId: form.userId,
+          cohortId: form.cohortId || null,
+          enrollmentId: form.enrollmentId || null,
+          totalAmount: parseFloat(form.totalAmount),
+          method: form.method,
+          type: form.type,
+          installments: parseInt(form.installments),
+          invoicePrefix: form.invoicePrefix || null,
+          notes: form.notes || null,
         }),
       });
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || "Error al crear pago");
+        throw new Error(err.error || "Error al crear pagos");
       }
 
-      setShowCreateModal(false);
-      setCreateForm({
+      const data = await res.json();
+      setSuccess(
+        `${data.count} pago(s) creado(s) correctamente como ${form.method === "STRIPE" ? "Stripe" : "Transferencia"}`
+      );
+      setShowCreate(false);
+      setForm({
         userId: "",
         cohortId: "",
-        amount: "",
+        enrollmentId: "",
+        totalAmount: "",
+        method: "STRIPE",
         type: "SINGLE",
-        status: "COMPLETED",
-        installmentNumber: "",
-        totalInstallments: "",
-        invoiceNumber: "",
+        installments: "1",
+        invoicePrefix: "",
         notes: "",
       });
-      await fetchPayments();
+      await fetchData();
+      setTimeout(() => setSuccess(""), 4000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
       setCreating(false);
     }
   };
+
+  const handleAction = async (paymentId: string, action: string) => {
+    const labels: Record<string, string> = {
+      verify_transfer: "verificar esta transferencia",
+      mark_failed: "marcar como fallido",
+      refund: "marcar como reembolsado",
+    };
+
+    if (!confirm(`¿Seguro que quieres ${labels[action] || action}?`)) return;
+
+    try {
+      setActionLoading(paymentId);
+      const res = await fetch("/api/admin/facturacion", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentId, action }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Error");
+      }
+
+      setSuccess(
+        action === "verify_transfer"
+          ? "Transferencia verificada correctamente"
+          : action === "refund"
+            ? "Pago marcado como reembolsado"
+            : "Pago actualizado"
+      );
+      await fetchData();
+      setTimeout(() => setSuccess(""), 4000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const selectedStudent = students.find((s) => s.id === form.userId);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -200,52 +250,54 @@ export default function FacturacionPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Facturación</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Gestión de pagos, facturas e ingresos
+            Gestión de pagos — Stripe y transferencias bancarias
           </p>
         </div>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => setShowCreate(true)}
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
         >
-          + Registrar Pago
+          + Nuevo Pago
         </button>
       </div>
+
+      {/* Success/Error messages */}
+      {success && (
+        <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-700">
+          {success}
+        </div>
+      )}
+      {error && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-600">
+          {error}
+          <button onClick={() => setError("")} className="ml-2 font-medium underline">
+            Cerrar
+          </button>
+        </div>
+      )}
 
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <p className="text-xs font-medium text-gray-500">Ingresos Totales</p>
-            <p className="mt-1 text-2xl font-bold text-green-600">
-              {formatCurrency(stats.totalRevenue)}
-            </p>
-            <p className="mt-1 text-xs text-gray-400">
-              {stats.completedPayments} pagos completados
-            </p>
+            <p className="mt-1 text-2xl font-bold text-green-600">{fmt(stats.totalRevenue)}</p>
+            <p className="mt-1 text-xs text-gray-400">{stats.completedPayments} pagos cobrados</p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <p className="text-xs font-medium text-gray-500">Pendiente de Cobro</p>
-            <p className="mt-1 text-2xl font-bold text-yellow-600">
-              {formatCurrency(stats.pendingAmount)}
-            </p>
+            <p className="mt-1 text-2xl font-bold text-yellow-600">{fmt(stats.pendingAmount)}</p>
             <p className="mt-1 text-xs text-gray-400">
-              {stats.totalPayments - stats.completedPayments - stats.failedPayments} pendientes
+              {stats.pendingTransfers} transferencias por verificar
             </p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <p className="text-xs font-medium text-gray-500">Pagos Totales</p>
-            <p className="mt-1 text-2xl font-bold text-gray-900">
-              {stats.totalPayments}
-            </p>
-            <p className="mt-1 text-xs text-gray-400">
-              {stats.failedPayments} fallidos
-            </p>
+            <p className="mt-1 text-2xl font-bold text-gray-900">{stats.totalPayments}</p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <p className="text-xs font-medium text-gray-500">Reembolsos</p>
-            <p className="mt-1 text-2xl font-bold text-gray-600">
-              {formatCurrency(stats.refundedAmount)}
-            </p>
+            <p className="mt-1 text-2xl font-bold text-gray-600">{fmt(stats.refundedAmount)}</p>
           </div>
         </div>
       )}
@@ -259,6 +311,15 @@ export default function FacturacionPage() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
+        <select
+          value={methodFilter}
+          onChange={(e) => setMethodFilter(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+        >
+          <option value="">Todos los métodos</option>
+          <option value="STRIPE">Stripe</option>
+          <option value="TRANSFERENCIA">Transferencia</option>
+        </select>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -277,25 +338,10 @@ export default function FacturacionPage() {
         >
           <option value="">Todas las cohortes</option>
           {cohorts.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
+            <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
       </div>
-
-      {/* Error */}
-      {error && (
-        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600">
-          {error}
-          <button
-            onClick={() => setError("")}
-            className="ml-2 font-medium underline"
-          >
-            Cerrar
-          </button>
-        </div>
-      )}
 
       {/* Payments Table */}
       {loading ? (
@@ -306,8 +352,7 @@ export default function FacturacionPage() {
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <p className="text-gray-500">No hay pagos registrados</p>
           <p className="mt-1 text-sm text-gray-400">
-            Los pagos aparecerán aquí cuando se registren manualmente o se
-            completen vía Stripe
+            Usa &quot;+ Nuevo Pago&quot; para crear pagos por Stripe o transferencia bancaria
           </p>
         </div>
       ) : (
@@ -317,11 +362,12 @@ export default function FacturacionPage() {
               <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                 <th className="px-4 py-3">Alumno</th>
                 <th className="px-4 py-3">Cohorte</th>
+                <th className="px-4 py-3">Método</th>
                 <th className="px-4 py-3">Tipo</th>
                 <th className="px-4 py-3 text-right">Importe</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Fecha</th>
-                <th className="px-4 py-3">Factura</th>
+                <th className="px-4 py-3">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -330,131 +376,111 @@ export default function FacturacionPage() {
                   <tr
                     key={p.id}
                     className="cursor-pointer hover:bg-gray-50 transition-colors"
-                    onClick={() =>
-                      setExpandedId(expandedId === p.id ? null : p.id)
-                    }
+                    onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {p.user.photo ? (
-                          <img
-                            src={p.user.photo}
-                            alt=""
-                            className="h-8 w-8 rounded-full object-cover"
-                          />
+                          <img src={p.user.photo} alt="" className="h-8 w-8 rounded-full object-cover" />
                         ) : (
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
-                            {p.user.firstName[0]}
-                            {p.user.lastName[0]}
+                            {p.user.firstName[0]}{p.user.lastName[0]}
                           </div>
                         )}
                         <div>
                           <p className="text-sm font-medium text-gray-900">
                             {p.user.firstName} {p.user.lastName}
                           </p>
-                          <p className="text-xs text-gray-500">
-                            {p.user.email}
-                          </p>
+                          <p className="text-xs text-gray-500">{p.user.email}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {p.cohort?.name || "—"}
-                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{p.cohort?.name || "—"}</td>
                     <td className="px-4 py-3">
-                      <span className="text-sm text-gray-600">
-                        {TYPE_LABELS[p.type] || p.type}
-                        {p.type === "INSTALLMENT" &&
-                          p.installmentNumber &&
-                          ` ${p.installmentNumber}/${p.totalInstallments}`}
+                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${METHOD_CONFIG[p.method]?.color}`}>
+                        {METHOD_CONFIG[p.method]?.label}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {p.type === "INSTALLMENT"
+                        ? `Cuota ${p.installmentNumber}/${p.totalInstallments}`
+                        : "Pago único"}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className="text-sm font-semibold text-gray-900">
-                        {formatCurrency(p.amount, p.currency)}
-                      </span>
+                      <span className="text-sm font-semibold text-gray-900">{fmt(p.amount, p.currency)}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          STATUS_LABELS[p.status]?.color || "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {STATUS_LABELS[p.status]?.label || p.status}
+                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_CONFIG[p.status]?.color}`}>
+                        {STATUS_CONFIG[p.status]?.label}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
-                      {p.paidAt
-                        ? formatDate(p.paidAt)
-                        : formatDate(p.createdAt)}
+                      {p.paidAt ? fmtDate(p.paidAt) : fmtDate(p.createdAt)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {p.invoiceNumber || "—"}
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      {p.status === "PENDING" && p.method === "TRANSFERENCIA" && (
+                        <button
+                          onClick={() => handleAction(p.id, "verify_transfer")}
+                          disabled={actionLoading === p.id}
+                          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+                        >
+                          {actionLoading === p.id ? "..." : "✓ Verificar"}
+                        </button>
+                      )}
+                      {p.status === "COMPLETED" && (
+                        <button
+                          onClick={() => handleAction(p.id, "refund")}
+                          disabled={actionLoading === p.id}
+                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          Reembolsar
+                        </button>
+                      )}
+                      {p.status === "PENDING" && p.method === "STRIPE" && (
+                        <span className="text-xs text-gray-400">Esperando Stripe</span>
+                      )}
                     </td>
                   </tr>
 
-                  {/* Expanded details */}
+                  {/* Expanded */}
                   {expandedId === p.id && (
-                    <tr key={`${p.id}-details`}>
-                      <td colSpan={7} className="bg-gray-50 px-6 py-4">
+                    <tr key={`${p.id}-detail`}>
+                      <td colSpan={8} className="bg-gray-50 px-6 py-4">
                         <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
                           <div>
-                            <p className="text-xs font-medium text-gray-400">
-                              Datos fiscales
-                            </p>
-                            <p className="mt-1 text-gray-700">
-                              {p.user.fiscalName || "No registrado"}
-                            </p>
+                            <p className="text-xs font-medium text-gray-400">Datos fiscales</p>
+                            <p className="mt-1 text-gray-700">{p.user.fiscalName || "No registrado"}</p>
+                            <p className="text-gray-500">NIF/CIF: {p.user.nifCif || "—"}</p>
                             <p className="text-gray-500">
-                              NIF/CIF: {p.user.nifCif || "—"}
-                            </p>
-                            <p className="text-gray-500">
-                              Tipo:{" "}
-                              {p.user.businessType === "AUTONOMO"
-                                ? "Autónomo"
-                                : p.user.businessType === "EMPRESA"
-                                  ? "Empresa"
-                                  : p.user.businessType === "PARTICULAR"
-                                    ? "Particular"
-                                    : "—"}
+                              Tipo: {p.user.businessType === "AUTONOMO" ? "Autónomo" : p.user.businessType === "EMPRESA" ? "Empresa" : p.user.businessType === "PARTICULAR" ? "Particular" : "—"}
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs font-medium text-gray-400">
-                              Stripe
-                            </p>
-                            <p className="mt-1 text-gray-500">
-                              PI:{" "}
-                              {p.stripePaymentIntentId
-                                ? `${p.stripePaymentIntentId.slice(0, 20)}...`
-                                : "Manual"}
-                            </p>
-                            <p className="text-gray-500">
-                              Session:{" "}
-                              {p.stripeSessionId
-                                ? `${p.stripeSessionId.slice(0, 20)}...`
-                                : "—"}
-                            </p>
+                            <p className="text-xs font-medium text-gray-400">Nº Factura</p>
+                            <p className="mt-1 text-gray-700">{p.invoiceNumber || "Sin asignar"}</p>
                           </div>
                           <div>
                             <p className="text-xs font-medium text-gray-400">
-                              Suscripción
+                              {p.method === "STRIPE" ? "Stripe IDs" : "Método"}
                             </p>
-                            <p className="mt-1 text-gray-500">
-                              {p.enrollment?.subscriptionType || "—"}
-                            </p>
+                            {p.method === "STRIPE" ? (
+                              <>
+                                <p className="mt-1 text-gray-500 text-xs">
+                                  PI: {p.stripePaymentIntentId ? `${p.stripePaymentIntentId.slice(0, 24)}...` : "—"}
+                                </p>
+                                <p className="text-gray-500 text-xs">
+                                  Session: {p.stripeSessionId ? `${p.stripeSessionId.slice(0, 24)}...` : "—"}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="mt-1 text-gray-700">Transferencia bancaria</p>
+                            )}
                           </div>
                           <div>
-                            <p className="text-xs font-medium text-gray-400">
-                              Notas
-                            </p>
-                            <p className="mt-1 text-gray-500">
-                              {p.notes || "Sin notas"}
-                            </p>
+                            <p className="text-xs font-medium text-gray-400">Notas</p>
+                            <p className="mt-1 text-gray-500 whitespace-pre-line">{p.notes || "Sin notas"}</p>
                             {p.refundedAt && (
-                              <p className="mt-1 text-red-500">
-                                Reembolsado: {formatDate(p.refundedAt)}
-                              </p>
+                              <p className="mt-1 text-red-500">Reembolsado: {fmtDate(p.refundedAt)}</p>
                             )}
                           </div>
                         </div>
@@ -469,32 +495,65 @@ export default function FacturacionPage() {
       )}
 
       {/* Create Payment Modal */}
-      {showCreateModal && (
+      {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">
-                Registrar Pago Manual
-              </h2>
+              <h2 className="text-lg font-bold text-gray-900">Nuevo Pago</h2>
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => setShowCreate(false)}
                 className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreatePayment} className="mt-4 space-y-4">
+            <form onSubmit={handleCreate} className="mt-4 space-y-4">
+              {/* Payment method selector */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Método de pago
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, method: "STRIPE" })}
+                    className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-colors ${
+                      form.method === "STRIPE"
+                        ? "border-purple-500 bg-purple-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <span className="text-2xl">💳</span>
+                    <span className="text-sm font-medium text-gray-900">Link de Stripe</span>
+                    <span className="text-xs text-gray-500 text-center">
+                      Se genera un enlace de pago
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, method: "TRANSFERENCIA" })}
+                    className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-colors ${
+                      form.method === "TRANSFERENCIA"
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <span className="text-2xl">🏦</span>
+                    <span className="text-sm font-medium text-gray-900">Transferencia</span>
+                    <span className="text-xs text-gray-500 text-center">
+                      Se verifica manualmente
+                    </span>
+                  </button>
+                </div>
+              </div>
+
               {/* Student */}
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Alumno *
-                </label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Alumno *</label>
                 <select
-                  value={createForm.userId}
-                  onChange={(e) =>
-                    setCreateForm({ ...createForm, userId: e.target.value })
-                  }
+                  value={form.userId}
+                  onChange={(e) => setForm({ ...form, userId: e.target.value, cohortId: "", enrollmentId: "" })}
                   required
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                 >
@@ -507,172 +566,186 @@ export default function FacturacionPage() {
                 </select>
               </div>
 
-              {/* Cohort */}
+              {/* Cohort (auto from student or manual) */}
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Cohorte
-                </label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Cohorte</label>
                 <select
-                  value={createForm.cohortId}
-                  onChange={(e) =>
-                    setCreateForm({ ...createForm, cohortId: e.target.value })
-                  }
+                  value={form.cohortId}
+                  onChange={(e) => {
+                    const cohortId = e.target.value;
+                    const enrollment = selectedStudent?.enrollments.find((en) => en.cohort.id === cohortId);
+                    setForm({ ...form, cohortId, enrollmentId: enrollment?.id || "" });
+                  }}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                 >
                   <option value="">Sin cohorte</option>
                   {cohorts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Amount + Type */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Importe (EUR) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={createForm.amount}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, amount: e.target.value })
-                    }
-                    required
-                    placeholder="0.00"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Tipo
-                  </label>
-                  <select
-                    value={createForm.type}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, type: e.target.value })
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              {/* Total amount */}
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Importe total (EUR) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.totalAmount}
+                  onChange={(e) => setForm({ ...form, totalAmount: e.target.value })}
+                  required
+                  placeholder="3000.00"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Payment type: single or installments */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Forma de pago
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, type: "SINGLE", installments: "1" })}
+                    className={`rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                      form.type === "SINGLE"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
                   >
-                    <option value="SINGLE">Pago único</option>
-                    <option value="INSTALLMENT">Cuota</option>
-                  </select>
+                    Pago único
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, type: "INSTALLMENT", installments: "3" })}
+                    className={`rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                      form.type === "INSTALLMENT"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
+                  >
+                    Fraccionado
+                  </button>
                 </div>
               </div>
 
-              {/* Installment details */}
-              {createForm.type === "INSTALLMENT" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Cuota nº
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={createForm.installmentNumber}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          installmentNumber: e.target.value,
-                        })
-                      }
-                      placeholder="1"
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                    />
+              {/* Installment selector */}
+              {form.type === "INSTALLMENT" && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Número de cuotas
+                  </label>
+                  <div className="flex gap-2">
+                    {[2, 3, 4, 5, 6].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setForm({ ...form, installments: String(n) })}
+                        className={`flex-1 rounded-lg border-2 py-2 text-sm font-medium transition-colors ${
+                          form.installments === String(n)
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-gray-200 text-gray-600 hover:border-gray-300"
+                        }`}
+                      >
+                        {n}x
+                      </button>
+                    ))}
                   </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Total cuotas
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={createForm.totalInstallments}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          totalInstallments: e.target.value,
-                        })
-                      }
-                      placeholder="6"
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
+                  {form.totalAmount && (
+                    <p className="mt-2 text-sm text-gray-500">
+                      {parseInt(form.installments)} cuotas de{" "}
+                      <span className="font-semibold text-gray-700">
+                        {fmt(parseFloat(form.totalAmount) / parseInt(form.installments))}
+                      </span>
+                    </p>
+                  )}
                 </div>
               )}
 
-              {/* Status + Invoice */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Estado
-                  </label>
-                  <select
-                    value={createForm.status}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, status: e.target.value })
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  >
-                    <option value="COMPLETED">Pagado</option>
-                    <option value="PENDING">Pendiente</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Nº Factura
-                  </label>
-                  <input
-                    type="text"
-                    value={createForm.invoiceNumber}
-                    onChange={(e) =>
-                      setCreateForm({
-                        ...createForm,
-                        invoiceNumber: e.target.value,
-                      })
-                    }
-                    placeholder="FR-2026-001"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
+              {/* Invoice prefix */}
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Prefijo factura
+                </label>
+                <input
+                  type="text"
+                  value={form.invoicePrefix}
+                  onChange={(e) => setForm({ ...form, invoicePrefix: e.target.value })}
+                  placeholder="FR-2026-001"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  {form.type === "INSTALLMENT" && parseInt(form.installments) > 1
+                    ? `Se generarán: ${form.invoicePrefix || "FR-2026-001"}-01, -02, etc.`
+                    : "Número de factura para este pago"}
+                </p>
               </div>
 
               {/* Notes */}
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Notas
-                </label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Notas</label>
                 <textarea
-                  value={createForm.notes}
-                  onChange={(e) =>
-                    setCreateForm({ ...createForm, notes: e.target.value })
-                  }
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   rows={2}
-                  placeholder="Transferencia bancaria, beca, etc."
+                  placeholder={
+                    form.method === "TRANSFERENCIA"
+                      ? "Ej: Pendiente de recibir transferencia. Ref: ACTIVA-2026"
+                      : "Notas opcionales..."
+                  }
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                 />
               </div>
+
+              {/* Summary */}
+              {form.userId && form.totalAmount && (
+                <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
+                  <p className="text-xs font-medium text-gray-500 mb-1">Resumen</p>
+                  <p className="text-sm text-gray-700">
+                    {form.method === "STRIPE" ? "💳 Link de Stripe" : "🏦 Transferencia bancaria"}
+                    {" · "}
+                    {form.type === "INSTALLMENT" && parseInt(form.installments) > 1
+                      ? `${form.installments} cuotas de ${fmt(parseFloat(form.totalAmount) / parseInt(form.installments))}`
+                      : `Pago único de ${fmt(parseFloat(form.totalAmount))}`}
+                  </p>
+                  {form.method === "TRANSFERENCIA" && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Los pagos se crearán como &quot;Pendiente&quot; — podrás verificar cada
+                      transferencia cuando llegue
+                    </p>
+                  )}
+                  {form.method === "STRIPE" && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Los pagos se crearán como &quot;Pendiente&quot; — Stripe los marcará automáticamente
+                      cuando el alumno pague
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Submit */}
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => setShowCreate(false)}
                   className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={creating || !createForm.userId || !createForm.amount}
+                  disabled={creating || !form.userId || !form.totalAmount}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {creating ? "Registrando..." : "Registrar Pago"}
+                  {creating
+                    ? "Creando..."
+                    : form.method === "STRIPE"
+                      ? "Crear Pago Stripe"
+                      : "Registrar Transferencia"}
                 </button>
               </div>
             </form>

@@ -36,6 +36,11 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$ BEGIN
+  CREATE TYPE "PaymentMethod" AS ENUM ('STRIPE', 'TRANSFERENCIA');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- ────────────────────────────────────────────────────────────
 -- 2. ALTER TABLE users — Billing fields
 -- ────────────────────────────────────────────────────────────
@@ -91,6 +96,7 @@ CREATE TABLE IF NOT EXISTS "payments" (
   "amount" DOUBLE PRECISION NOT NULL,
   "currency" TEXT NOT NULL DEFAULT 'EUR',
   "type" "PaymentType" NOT NULL DEFAULT 'SINGLE',
+  "payment_method" "PaymentMethod" NOT NULL DEFAULT 'STRIPE',
   "status" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
   "installment_number" INTEGER,
   "total_installments" INTEGER,
