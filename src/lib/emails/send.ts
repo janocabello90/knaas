@@ -24,7 +24,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ success: b
       to: Array.isArray(options.to) ? options.to : [options.to],
       subject: options.subject,
       html: options.html,
-      reply_to: options.replyTo || "alex@fisioreferentes.com",
+      replyTo: options.replyTo || "alex@fisioreferentes.com",
       tags: options.tags,
     });
 
