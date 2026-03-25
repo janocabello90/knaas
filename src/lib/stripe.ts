@@ -1,12 +1,26 @@
 import Stripe from "stripe";
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY is not set in environment variables");
+// Lazy initialization — only throws when actually used at runtime,
+// not during build/compile time
+let _stripe: Stripe | null = null;
+
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error("STRIPE_SECRET_KEY is not set in environment variables");
+    }
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      typescript: true,
+    });
+  }
+  return _stripe;
 }
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-04-30.basil",
-  typescript: true,
+// Convenience export for backward compat
+export const stripe = new Proxy({} as Stripe, {
+  get(_target, prop) {
+    return (getStripe() as unknown as Record<string | symbol, unknown>)[prop];
+  },
 });
 
 /**
@@ -22,7 +36,8 @@ export async function getOrCreateStripeCustomer(
 ): Promise<string> {
   if (existingStripeId) return existingStripeId;
 
-  const customer = await stripe.customers.create({
+  const s = getStripe();
+  const customer = await s.customers.create({
     email,
     name,
     metadata: { knaas_user_id: userId },
