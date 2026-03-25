@@ -8,26 +8,27 @@ function generateUniqueCode(): string {
   return crypto.randomBytes(4).toString("hex").toUpperCase().slice(0, 8);
 }
 
-export async function GET(request: NextRequest) {
+async function getAuthAdmin() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const dbUser = await prisma.user.findUnique({
+    where: { supabaseAuthId: user.id },
+    select: { id: true, role: true },
+  });
+
+  if (!dbUser || dbUser.role !== "SUPERADMIN") return null;
+  return dbUser;
+}
+
+export async function GET() {
   try {
-    const supabase = await createSupabaseServerClient();
-
-    // Check auth - SUPERADMIN only
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const userRole = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { role: true },
-    });
-
-    if (userRole?.role !== "SUPERADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const admin = await getAuthAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
     // Get all students with their enrollment and billing info
@@ -38,8 +39,7 @@ export async function GET(request: NextRequest) {
         email: true,
         firstName: true,
         lastName: true,
-        avatarUrl: true,
-        lastLogin: true,
+        photo: true,
         enrollments: {
           select: {
             id: true,
@@ -54,13 +54,10 @@ export async function GET(request: NextRequest) {
             },
           },
         },
-        billingInfo: {
-          select: {
-            nifCif: true,
-            fiscalName: true,
-            businessType: true,
-          },
-        },
+        // Billing fields are directly on User, not a relation
+        nifCif: true,
+        fiscalName: true,
+        businessType: true,
         payments: {
           select: {
             id: true,
@@ -84,7 +81,19 @@ export async function GET(request: NextRequest) {
         .reduce((sum, p) => sum + p.amount, 0);
 
       return {
-        ...student,
+        id: student.id,
+        email: student.email,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        photo: student.photo,
+        enrollments: student.enrollments,
+        billingInfo: student.nifCif || student.fiscalName
+          ? {
+              nifCif: student.nifCif || "",
+              fiscalName: student.fiscalName || "",
+              businessType: student.businessType || "",
+            }
+          : null,
         paymentSummary: {
           totalPaid,
           pending,
@@ -92,7 +101,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Get all invitation links with cohort info and usage stats
+    // Get all invitation links with cohort info
     const invitations = await prisma.invitationLink.findMany({
       select: {
         id: true,
@@ -112,9 +121,9 @@ export async function GET(request: NextRequest) {
         isActive: true,
         price: true,
         installmentsOk: true,
-        createdBy: true,
+        createdById: true,
         createdAt: true,
-        creator: {
+        createdBy: {
           select: {
             firstName: true,
             lastName: true,
@@ -155,24 +164,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient();
-
-    // Check auth - SUPERADMIN only
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const userRole = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { role: true },
-    });
-
-    if (userRole?.role !== "SUPERADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const admin = await getAuthAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
     const {
@@ -188,14 +182,14 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     if (!type || !cohortId || !maxUses) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Faltan campos obligatorios" },
         { status: 400 }
       );
     }
 
     if (!["PAYMENT", "FREE"].includes(type)) {
       return NextResponse.json(
-        { error: "Invalid invitation type" },
+        { error: "Tipo de invitación inválido" },
         { status: 400 }
       );
     }
@@ -226,7 +220,7 @@ export async function POST(request: NextRequest) {
         isActive: true,
         price: price || null,
         installmentsOk: installmentsOk || false,
-        createdBy: user.id,
+        createdById: admin.id,
       },
       include: {
         cohort: {
@@ -235,7 +229,7 @@ export async function POST(request: NextRequest) {
             name: true,
           },
         },
-        creator: {
+        createdBy: {
           select: {
             firstName: true,
             lastName: true,

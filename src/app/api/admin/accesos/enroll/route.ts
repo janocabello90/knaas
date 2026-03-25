@@ -16,12 +16,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userRole = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { role: true },
+    const dbAdmin = await prisma.user.findUnique({
+      where: { supabaseAuthId: user.id },
+      select: { id: true, role: true },
     });
 
-    if (userRole?.role !== "SUPERADMIN") {
+    if (!dbAdmin || dbAdmin.role !== "SUPERADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       // Create database user
       dbUser = await prisma.user.create({
         data: {
-          id: authUser.user.id,
+          supabaseAuthId: authUser.user.id,
           email,
           firstName,
           lastName,

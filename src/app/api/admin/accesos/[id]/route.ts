@@ -19,12 +19,12 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const dbUser = await prisma.user.findUnique({
+    const dbAdmin = await prisma.user.findUnique({
       where: { supabaseAuthId: user.id },
-      select: { role: true },
+      select: { id: true, role: true },
     });
 
-    if (dbUser?.role !== "SUPERADMIN") {
+    if (!dbAdmin || dbAdmin.role !== "SUPERADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -92,12 +92,12 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const dbUser = await prisma.user.findUnique({
+    const dbAdmin = await prisma.user.findUnique({
       where: { supabaseAuthId: user.id },
-      select: { role: true },
+      select: { id: true, role: true },
     });
 
-    if (dbUser?.role !== "SUPERADMIN") {
+    if (!dbAdmin || dbAdmin.role !== "SUPERADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
