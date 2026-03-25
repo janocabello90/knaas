@@ -171,11 +171,17 @@ ALTER TABLE "payments" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "invitation_links" ENABLE ROW LEVEL SECURITY;
 
 -- Allow service_role full access (your API uses service_role key)
-CREATE POLICY IF NOT EXISTS "service_role_payments" ON "payments"
-  FOR ALL USING (true) WITH CHECK (true);
+DO $$ BEGIN
+  CREATE POLICY "service_role_payments" ON "payments"
+    FOR ALL USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY IF NOT EXISTS "service_role_invitation_links" ON "invitation_links"
-  FOR ALL USING (true) WITH CHECK (true);
+DO $$ BEGIN
+  CREATE POLICY "service_role_invitation_links" ON "invitation_links"
+    FOR ALL USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ────────────────────────────────────────────────────────────
 -- DONE! Verify with:
