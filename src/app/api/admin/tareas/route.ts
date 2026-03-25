@@ -118,8 +118,8 @@ export async function GET(request: NextRequest) {
         { dueDate: "asc" },
       ],
       include: {
-        assignedTo: { select: { id: true, firstName: true, lastName: true } },
-        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        assignedTo: { select: { id: true, firstName: true, lastName: true, photo: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true, photo: true } },
         cohort: { select: { id: true, name: true, program: true } },
       },
     });
@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
     // Fetch assignable users (superadmins + mentors)
     const assignableUsers = await prisma.user.findMany({
       where: { role: { in: ["SUPERADMIN", "MENTOR"] } },
-      select: { id: true, firstName: true, lastName: true, role: true },
+      select: { id: true, firstName: true, lastName: true, role: true, photo: true },
       orderBy: { firstName: "asc" },
     });
 
@@ -226,8 +226,8 @@ export async function POST(request: NextRequest) {
         triggerConfig: triggerConfig || null,
       },
       include: {
-        assignedTo: { select: { id: true, firstName: true, lastName: true } },
-        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        assignedTo: { select: { id: true, firstName: true, lastName: true, photo: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true, photo: true } },
         cohort: { select: { id: true, name: true, program: true } },
       },
     });

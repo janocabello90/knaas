@@ -22,11 +22,13 @@ import {
   ChevronRight,
   Sparkles,
   Filter,
+  LayoutList,
+  Columns3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────
-type UserRef = { id: string; firstName: string; lastName: string };
+type UserRef = { id: string; firstName: string; lastName: string; photo?: string | null };
 type CohortRef = { id: string; name: string; program: string };
 
 type Task = {
@@ -47,7 +49,7 @@ type Task = {
 };
 
 type CohortOption = { id: string; name: string; program: string; status: string };
-type AssignableUser = { id: string; firstName: string; lastName: string; role: string };
+type AssignableUser = { id: string; firstName: string; lastName: string; role: string; photo?: string | null };
 
 // ── Constants ──────────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -93,6 +95,35 @@ function timeUntilDue(dateStr: string | null): { label: string; urgent: boolean 
   return { label: `${days}d`, urgent: false };
 }
 
+// ── Avatar component ───────────────────────────────────────────────────
+function Avatar({ user, size = 24 }: { user: UserRef | null; size?: number }) {
+  if (!user) return null;
+  const initials = `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase();
+  const px = `${size}px`;
+
+  if (user.photo) {
+    return (
+      <img
+        src={user.photo}
+        alt={`${user.firstName} ${user.lastName}`}
+        className="shrink-0 rounded-full object-cover"
+        style={{ width: px, height: px }}
+        title={`${user.firstName} ${user.lastName}`}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="flex shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-600"
+      style={{ width: px, height: px, fontSize: `${Math.round(size * 0.4)}px` }}
+      title={`${user.firstName} ${user.lastName}`}
+    >
+      {initials}
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ════════════════════════════════════════════════════════════════════════
@@ -105,7 +136,9 @@ export default function TareasPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("active"); // "active" | "all" | "completed"
+  const [filterStatus, setFilterStatus] = useState<string>("active");
+  const [filterPerson, setFilterPerson] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
   const [showCompleted, setShowCompleted] = useState(false);
 
   const fetchTasks = useCallback(() => {
@@ -144,6 +177,16 @@ export default function TareasPage() {
     if (res.ok) fetchTasks();
   };
 
+  const handleStatusChange = async (task: Task, newStatus: "PENDING" | "IN_PROGRESS" | "COMPLETED") => {
+    if (task.status === newStatus) return;
+    const res = await fetch(`/api/admin/tareas/${task.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (res.ok) fetchTasks();
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("¿Eliminar esta tarea?")) return;
     const res = await fetch(`/api/admin/tareas/${id}`, { method: "DELETE" });
@@ -165,6 +208,13 @@ export default function TareasPage() {
     if (filterCategory !== "all" && t.category !== filterCategory) return false;
     if (filterStatus === "active" && t.status === "COMPLETED") return false;
     if (filterStatus === "completed" && t.status !== "COMPLETED") return false;
+    if (filterPerson !== "all") {
+      if (filterPerson === "unassigned") {
+        if (t.assignedTo) return false;
+      } else {
+        if (t.assignedTo?.id !== filterPerson) return false;
+      }
+    }
     return true;
   });
 
@@ -198,13 +248,38 @@ export default function TareasPage() {
             Tareas de la academia · auto-verificación activada
           </p>
         </div>
-        <button
-          onClick={() => { setEditingTask(null); setShowForm(true); }}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-        >
-          <Plus size={16} />
-          Nueva tarea
-        </button>
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex rounded-lg border border-gray-200 bg-white p-0.5">
+            <button
+              onClick={() => setViewMode("list")}
+              className={cn(
+                "rounded-md p-1.5 transition-all",
+                viewMode === "list" ? "bg-gray-100 text-gray-900" : "text-gray-400 hover:text-gray-600"
+              )}
+              title="Vista lista"
+            >
+              <LayoutList size={18} />
+            </button>
+            <button
+              onClick={() => setViewMode("kanban")}
+              className={cn(
+                "rounded-md p-1.5 transition-all",
+                viewMode === "kanban" ? "bg-gray-100 text-gray-900" : "text-gray-400 hover:text-gray-600"
+              )}
+              title="Vista Kanban"
+            >
+              <Columns3 size={18} />
+            </button>
+          </div>
+          <button
+            onClick={() => { setEditingTask(null); setShowForm(true); }}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            <Plus size={16} />
+            Nueva tarea
+          </button>
+        </div>
       </div>
 
       {/* Auto-completed banner */}
@@ -240,7 +315,7 @@ export default function TareasPage() {
       </div>
 
       {/* Filters */}
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5 text-xs text-gray-500">
           <Filter size={14} />
           <span>Filtrar:</span>
@@ -277,18 +352,102 @@ export default function TareasPage() {
             <option key={c.value} value={c.value}>{c.label}</option>
           ))}
         </select>
+        {/* Person filter */}
+        <div className="flex items-center gap-1.5">
+          <Users size={14} className="text-gray-400" />
+          <div className="flex gap-1 items-center">
+            <button
+              onClick={() => setFilterPerson("all")}
+              className={cn(
+                "rounded-full px-2.5 py-1 text-xs font-medium transition-all",
+                filterPerson === "all"
+                  ? "bg-blue-100 text-blue-700"
+                  : "bg-gray-100 text-gray-500 hover:text-gray-700"
+              )}
+            >
+              Todos
+            </button>
+            {assignableUsers.map((u) => (
+              <button
+                key={u.id}
+                onClick={() => setFilterPerson(filterPerson === u.id ? "all" : u.id)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium transition-all",
+                  filterPerson === u.id
+                    ? "bg-blue-100 text-blue-700 ring-2 ring-blue-300"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                )}
+                title={`${u.firstName} ${u.lastName}`}
+              >
+                <Avatar user={u} size={20} />
+                <span>{u.firstName}</span>
+              </button>
+            ))}
+            <button
+              onClick={() => setFilterPerson(filterPerson === "unassigned" ? "all" : "unassigned")}
+              className={cn(
+                "rounded-full px-2.5 py-1 text-xs font-medium transition-all",
+                filterPerson === "unassigned"
+                  ? "bg-orange-100 text-orange-700"
+                  : "bg-gray-100 text-gray-500 hover:text-gray-700"
+              )}
+            >
+              Sin asignar
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Task sections */}
+      {/* Views */}
       {filteredTasks.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 py-16 text-center">
           <Target size={40} className="mx-auto mb-3 text-gray-400" />
           <p className="font-medium text-gray-600">No hay tareas en esta vista</p>
           <p className="mt-1 text-sm text-gray-500">Crea una nueva tarea con el botón de arriba</p>
         </div>
+      ) : viewMode === "kanban" ? (
+        /* ── KANBAN VIEW ─────────────────────────────────────────────── */
+        <div className="grid grid-cols-3 gap-4">
+          <KanbanColumn
+            title="Pendientes"
+            icon={<Circle size={16} className="text-gray-400" />}
+            tasks={pendingTasks}
+            status="PENDING"
+            color="border-gray-200"
+            autoCompleted={autoCompleted}
+            onToggle={handleStatusToggle}
+            onStatusChange={handleStatusChange}
+            onEdit={openEdit}
+            onDelete={handleDelete}
+          />
+          <KanbanColumn
+            title="En progreso"
+            icon={<Clock size={16} className="text-blue-500" />}
+            tasks={inProgressTasks}
+            status="IN_PROGRESS"
+            color="border-blue-200"
+            autoCompleted={autoCompleted}
+            onToggle={handleStatusToggle}
+            onStatusChange={handleStatusChange}
+            onEdit={openEdit}
+            onDelete={handleDelete}
+          />
+          <KanbanColumn
+            title="Completadas"
+            icon={<CheckCircle2 size={16} className="text-green-500" />}
+            tasks={completedTasks}
+            status="COMPLETED"
+            color="border-green-200"
+            autoCompleted={autoCompleted}
+            onToggle={handleStatusToggle}
+            onStatusChange={handleStatusChange}
+            onEdit={openEdit}
+            onDelete={handleDelete}
+          />
+        </div>
       ) : (
+        /* ── LIST VIEW ───────────────────────────────────────────────── */
         <div className="space-y-6">
-          {/* In Progress */}
           {inProgressTasks.length > 0 && (
             <TaskSection
               title="En progreso"
@@ -300,8 +459,6 @@ export default function TareasPage() {
               onDelete={handleDelete}
             />
           )}
-
-          {/* Pending */}
           {pendingTasks.length > 0 && (
             <TaskSection
               title="Pendientes"
@@ -313,8 +470,6 @@ export default function TareasPage() {
               onDelete={handleDelete}
             />
           )}
-
-          {/* Completed */}
           {completedTasks.length > 0 && (
             <div>
               <button
@@ -356,7 +511,203 @@ export default function TareasPage() {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// TASK SECTION
+// KANBAN COLUMN
+// ════════════════════════════════════════════════════════════════════════
+function KanbanColumn({
+  title,
+  icon,
+  tasks,
+  status,
+  color,
+  autoCompleted,
+  onToggle,
+  onStatusChange,
+  onEdit,
+  onDelete,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  tasks: Task[];
+  status: "PENDING" | "IN_PROGRESS" | "COMPLETED";
+  color: string;
+  autoCompleted: string[];
+  onToggle: (t: Task) => void;
+  onStatusChange: (t: Task, s: "PENDING" | "IN_PROGRESS" | "COMPLETED") => void;
+  onEdit: (t: Task) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div
+      className={cn("rounded-xl border-2 bg-gray-50/50 p-3", color)}
+      onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("bg-blue-50/50"); }}
+      onDragLeave={(e) => { e.currentTarget.classList.remove("bg-blue-50/50"); }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.currentTarget.classList.remove("bg-blue-50/50");
+        const taskId = e.dataTransfer.getData("taskId");
+        const task = tasks.find((t) => t.id === taskId);
+        if (!task) {
+          // Task is from another column, find it globally
+          const draggedTask = JSON.parse(e.dataTransfer.getData("task") || "null");
+          if (draggedTask) onStatusChange(draggedTask, status);
+        }
+      }}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-sm font-semibold text-gray-700">{title}</span>
+        </div>
+        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-gray-500 shadow-sm">
+          {tasks.length}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {tasks.map((task) => (
+          <KanbanCard
+            key={task.id}
+            task={task}
+            wasAutoCompleted={autoCompleted.includes(task.id)}
+            onToggle={() => onToggle(task)}
+            onStatusChange={(s) => onStatusChange(task, s)}
+            onEdit={() => onEdit(task)}
+            onDelete={() => onDelete(task.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// KANBAN CARD
+// ════════════════════════════════════════════════════════════════════════
+function KanbanCard({
+  task,
+  wasAutoCompleted,
+  onToggle,
+  onStatusChange,
+  onEdit,
+  onDelete,
+}: {
+  task: Task;
+  wasAutoCompleted: boolean;
+  onToggle: () => void;
+  onStatusChange: (s: "PENDING" | "IN_PROGRESS" | "COMPLETED") => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const cat = getCategoryConfig(task.category);
+  const pri = PRIORITY_MAP[task.priority] ?? PRIORITIES[1];
+  const due = timeUntilDue(task.dueDate);
+  const isAutomatic = task.triggerType !== "MANUAL";
+  const isDone = task.status === "COMPLETED";
+
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("taskId", task.id);
+        e.dataTransfer.setData("task", JSON.stringify(task));
+        e.currentTarget.classList.add("opacity-50");
+      }}
+      onDragEnd={(e) => { e.currentTarget.classList.remove("opacity-50"); }}
+      className={cn(
+        "group cursor-grab rounded-lg border bg-white p-3 shadow-sm transition-all hover:shadow-md active:cursor-grabbing",
+        wasAutoCompleted ? "border-green-300 bg-green-50/50 animate-pulse" : "border-gray-200",
+        isDone && "opacity-60"
+      )}
+    >
+      {/* Top: priority + actions */}
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-1.5">
+          <span className={cn("text-[10px] font-semibold", pri.color)}>●</span>
+          <span className={cn("flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium", cat.color)}>
+            {cat.icon}
+            {cat.label}
+          </span>
+          {isAutomatic && (
+            <span className="flex items-center gap-0.5 rounded bg-violet-100 px-1 py-0.5 text-[8px] font-medium text-violet-700">
+              <Zap size={7} />
+              Auto
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          <button onClick={onEdit} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            <Pencil size={12} />
+          </button>
+          <button onClick={onDelete} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500">
+            <Trash2 size={12} />
+          </button>
+        </div>
+      </div>
+
+      {/* Title */}
+      <p className={cn("mt-2 text-sm font-medium leading-tight", isDone ? "text-gray-400 line-through" : "text-gray-900")}>
+        {task.title}
+      </p>
+
+      {/* Description */}
+      {task.description && (
+        <p className="mt-1 line-clamp-2 text-[11px] text-gray-500">{task.description}</p>
+      )}
+
+      {/* Bottom: assignee + due + cohort */}
+      <div className="mt-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {/* Assignee avatar */}
+          {task.assignedTo ? (
+            <div className="flex items-center gap-1.5">
+              <Avatar user={task.assignedTo} size={22} />
+              <span className="text-[10px] font-medium text-gray-600">{task.assignedTo.firstName}</span>
+            </div>
+          ) : (
+            <span className="text-[10px] text-gray-400">Sin asignar</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {task.cohort && (
+            <span className="truncate max-w-[80px] rounded bg-gray-100 px-1.5 py-0.5 text-[9px] text-gray-500">
+              {task.cohort.name}
+            </span>
+          )}
+          {due && (
+            <span className={cn("flex items-center gap-0.5 text-[10px] font-medium", due.urgent ? "text-red-500" : "text-gray-400")}>
+              <Calendar size={9} />
+              {due.label}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Quick status buttons */}
+      <div className="mt-2 flex gap-1 border-t border-gray-100 pt-2">
+        {(["PENDING", "IN_PROGRESS", "COMPLETED"] as const).map((s) => {
+          const isActive = task.status === s;
+          const labels = { PENDING: "Pendiente", IN_PROGRESS: "En progreso", COMPLETED: "Hecha" };
+          const colors = {
+            PENDING: isActive ? "bg-gray-200 text-gray-700" : "text-gray-400 hover:bg-gray-100",
+            IN_PROGRESS: isActive ? "bg-blue-100 text-blue-700" : "text-gray-400 hover:bg-blue-50",
+            COMPLETED: isActive ? "bg-green-100 text-green-700" : "text-gray-400 hover:bg-green-50",
+          };
+          return (
+            <button
+              key={s}
+              onClick={() => onStatusChange(s)}
+              className={cn("flex-1 rounded px-1.5 py-1 text-[9px] font-medium transition-all", colors[s])}
+            >
+              {labels[s]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// TASK SECTION (list view)
 // ════════════════════════════════════════════════════════════════════════
 function TaskSection({
   title,
@@ -403,7 +754,7 @@ function TaskSection({
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// TASK ROW
+// TASK ROW (list view)
 // ════════════════════════════════════════════════════════════════════════
 function TaskRow({
   task,
@@ -458,6 +809,9 @@ function TaskRow({
         )}
       </button>
 
+      {/* Assignee avatar */}
+      <Avatar user={task.assignedTo} size={28} />
+
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -477,60 +831,37 @@ function TaskRow({
           )}
         </div>
         <div className="mt-0.5 flex items-center gap-2 flex-wrap">
-          {/* Category badge */}
           <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium", cat.color)}>
             {cat.icon}
             {cat.label}
           </span>
-          {/* Priority dot */}
           <span className={cn("text-[10px] font-medium", pri.color)}>
             ● {pri.label}
           </span>
-          {/* Cohort */}
           {task.cohort && (
-            <span className="text-[10px] text-gray-400">
-              {task.cohort.name}
-            </span>
+            <span className="text-[10px] text-gray-400">{task.cohort.name}</span>
           )}
-          {/* Assigned */}
           {task.assignedTo && (
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">
-              → {task.assignedTo.firstName}
-            </span>
+            <span className="text-[10px] text-gray-500">→ {task.assignedTo.firstName}</span>
           )}
-          {/* Due date */}
           {due && (
-            <span
-              className={cn(
-                "flex items-center gap-0.5 text-[10px] font-medium",
-                due.urgent ? "text-red-500" : "text-gray-400"
-              )}
-            >
+            <span className={cn("flex items-center gap-0.5 text-[10px] font-medium", due.urgent ? "text-red-500" : "text-gray-400")}>
               <Calendar size={9} />
               {due.label}
             </span>
           )}
-          {/* Description preview */}
           {task.description && (
-            <span className="truncate text-[10px] text-gray-400 max-w-[200px]">
-              {task.description}
-            </span>
+            <span className="truncate text-[10px] text-gray-400 max-w-[200px]">{task.description}</span>
           )}
         </div>
       </div>
 
       {/* Actions */}
       <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          onClick={onEdit}
-          className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-        >
+        <button onClick={onEdit} className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
           <Pencil size={14} />
         </button>
-        <button
-          onClick={onDelete}
-          className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
-        >
+        <button onClick={onDelete} className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500">
           <Trash2 size={14} />
         </button>
       </div>
@@ -581,7 +912,6 @@ function TaskFormModal({
 
     setSaving(true);
 
-    // Build trigger config
     let triggerConfig: Record<string, unknown> | null = null;
     if (triggerType === "MENTORIAS_SCHEDULED") {
       triggerConfig = { minSessions: triggerMinSessions };
@@ -629,7 +959,7 @@ function TaskFormModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-xl"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">
@@ -642,7 +972,6 @@ function TaskFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Title */}
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Título *</label>
             <input
@@ -655,7 +984,6 @@ function TaskFormModal({
             />
           </div>
 
-          {/* Description */}
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Descripción</label>
             <textarea
@@ -667,7 +995,6 @@ function TaskFormModal({
             />
           </div>
 
-          {/* Category + Priority */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Categoría</label>
@@ -695,23 +1022,40 @@ function TaskFormModal({
             </div>
           </div>
 
-          {/* Assigned + Due Date */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Asignar a</label>
-              <select
-                value={assignedToId}
-                onChange={(e) => setAssignedToId(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          {/* Assigned to - with avatars */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Asignar a</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAssignedToId("")}
+                className={cn(
+                  "rounded-lg border px-3 py-2 text-xs font-medium transition-all",
+                  !assignedToId ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500 hover:border-gray-300"
+                )}
               >
-                <option value="">Sin asignar</option>
-                {assignableUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.firstName} {u.lastName}
-                  </option>
-                ))}
-              </select>
+                Sin asignar
+              </button>
+              {assignableUsers.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => setAssignedToId(u.id)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all",
+                    assignedToId === u.id
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300"
+                  )}
+                >
+                  <Avatar user={u} size={22} />
+                  {u.firstName}
+                </button>
+              ))}
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Fecha límite</label>
               <input
@@ -721,23 +1065,19 @@ function TaskFormModal({
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
               />
             </div>
-          </div>
-
-          {/* Cohort */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Cohorte relacionada</label>
-            <select
-              value={cohortId}
-              onChange={(e) => setCohortId(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            >
-              <option value="">Ninguna</option>
-              {cohorts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.program})
-                </option>
-              ))}
-            </select>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Cohorte relacionada</label>
+              <select
+                value={cohortId}
+                onChange={(e) => setCohortId(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">Ninguna</option>
+                {cohorts.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.program})</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Auto-verification */}
@@ -759,7 +1099,6 @@ function TaskFormModal({
               {TRIGGER_TYPES.find((t) => t.value === triggerType)?.desc}
             </p>
 
-            {/* Trigger-specific config */}
             {triggerType === "MENTORIAS_SCHEDULED" && (
               <div className="mt-2">
                 <label className="text-[10px] text-violet-600">Mínimo de sesiones programadas</label>
@@ -818,7 +1157,6 @@ function TaskFormModal({
             )}
           </div>
 
-          {/* Submit */}
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
