@@ -161,7 +161,7 @@ export async function GET(
         payments: {
           select: {
             id: true,
-            amount: true,
+            totalAmount: true,
             status: true,
           },
         },
@@ -184,8 +184,8 @@ export async function GET(
     const paymentsSummary = {
       totalCompleted: completedPayments.length,
       totalPending: pendingPayments.length,
-      completedAmount: completedPayments.reduce((sum, p) => sum + p.amount, 0),
-      pendingAmount: pendingPayments.reduce((sum, p) => sum + p.amount, 0),
+      completedAmount: completedPayments.reduce((sum, p) => sum + p.totalAmount, 0),
+      pendingAmount: pendingPayments.reduce((sum, p) => sum + p.totalAmount, 0),
       paymentCount: cohort.payments.length,
     };
 

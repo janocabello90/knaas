@@ -61,7 +61,7 @@ export async function GET() {
         payments: {
           select: {
             id: true,
-            amount: true,
+            totalAmount: true,
             status: true,
             createdAt: true,
           },
@@ -74,11 +74,11 @@ export async function GET() {
     const studentsWithPaymentSummary = students.map((student) => {
       const totalPaid = student.payments
         .filter((p) => p.status === "COMPLETED")
-        .reduce((sum, p) => sum + p.amount, 0);
+        .reduce((sum, p) => sum + p.totalAmount, 0);
 
       const pending = student.payments
         .filter((p) => p.status === "PENDING")
-        .reduce((sum, p) => sum + p.amount, 0);
+        .reduce((sum, p) => sum + p.totalAmount, 0);
 
       return {
         id: student.id,

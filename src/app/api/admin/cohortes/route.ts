@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
         payments: {
           select: {
             id: true,
-            amount: true,
+            totalAmount: true,
             status: true,
           },
         },
@@ -131,10 +131,10 @@ export async function GET(request: NextRequest) {
         (p) => p.status === "PENDING"
       );
       const totalRevenue = completedPayments.reduce(
-        (sum, p) => sum + p.amount,
+        (sum, p) => sum + p.totalAmount,
         0
       );
-      const totalPending = pendingPayments.reduce((sum, p) => sum + p.amount, 0);
+      const totalPending = pendingPayments.reduce((sum, p) => sum + p.totalAmount, 0);
 
       // Get mentor names
       const mentorNames = cohort.mentors.map(
