@@ -1,5 +1,5 @@
 /**
- * Base HTML layout for all KNAAS transactional emails.
+ * Base HTML layout for all Academia transactional emails.
  * Inline styles for max email-client compatibility.
  */
 
@@ -44,7 +44,7 @@ export function baseLayout(content: string, preheader?: string): string {
                 © ${new Date().getFullYear()} FisioReferentes · De Fisio a Empresario
               </p>
               <p style="margin:8px 0 0;font-size:12px;color:${TEXT_MUTED};">
-                Este email ha sido enviado desde la plataforma KNAAS.
+                Este email ha sido enviado desde la Academia de FisioReferentes.
               </p>
             </td>
           </tr>

@@ -1,5 +1,5 @@
 /**
- * KNAAS — Email templates for all transactional flows.
+ * Academia — Email templates for all transactional flows.
  * Each template function returns { subject, html }.
  */
 

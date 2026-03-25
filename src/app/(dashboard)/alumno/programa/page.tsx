@@ -204,10 +204,10 @@ export default async function ProgramaPage() {
                           Continuar paso
                         </Link>
                         <Link
-                          href={`/alumno/knaas?paso=${step.number}`}
+                          href={`/alumno/academia?paso=${step.number}`}
                           className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
                         >
-                          Abrir KNAAS
+                          Abrir Academia IA
                         </Link>
                       </div>
                     )}

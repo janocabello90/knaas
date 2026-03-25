@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
             const customer = await stripe.customers.create({
               email: dbUser.email,
               name: `${dbUser.firstName} ${dbUser.lastName}`,
-              metadata: { knaas_user_id: dbUser.id },
+              metadata: { academia_user_id: dbUser.id },
             });
             stripeCustomerId = customer.id;
             await prisma.user.update({
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
       // User not logged in — that's ok for checkout
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://knaas.vercel.app";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://academia.fisioreferentes.com";
 
     // Single payment checkout
     const sessionParams: Record<string, unknown> = {

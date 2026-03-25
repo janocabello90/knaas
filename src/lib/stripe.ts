@@ -40,7 +40,7 @@ export async function getOrCreateStripeCustomer(
   const customer = await s.customers.create({
     email,
     name,
-    metadata: { knaas_user_id: userId },
+    metadata: { academia_user_id: userId },
   });
 
   // Update user with stripe customer id (done by caller to avoid circular deps)

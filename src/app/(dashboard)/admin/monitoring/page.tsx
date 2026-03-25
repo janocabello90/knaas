@@ -278,14 +278,14 @@ export default function MonitoringPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Monitoring IA</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Consumo de KNAAS, actividad de alumnos y alertas del sistema
+          Consumo de Academia IA, actividad de alumnos y alertas del sistema
         </p>
       </div>
 
       {/* Global Stats */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {[
-          { label: "Sesiones KNAAS", value: g.totalSessions.toLocaleString("es-ES"), icon: <Bot size={18} />, color: "bg-blue-50 text-blue-600" },
+          { label: "Sesiones IA", value: g.totalSessions.toLocaleString("es-ES"), icon: <Bot size={18} />, color: "bg-blue-50 text-blue-600" },
           { label: "Tokens totales", value: formatTokens(g.totalTokens), icon: <Zap size={18} />, color: "bg-amber-50 text-amber-600" },
           { label: "Coste total", value: formatCost(g.totalCost), icon: <DollarSign size={18} />, color: "bg-green-50 text-green-600" },
           { label: "Coste / sesión", value: formatCost(g.avgCostPerSession), icon: <TrendingUp size={18} />, color: "bg-purple-50 text-purple-600" },
@@ -345,7 +345,7 @@ function OverviewTab({ data }: { data: MonitoringData }) {
       {/* Daily usage chart */}
       <div className="rounded-xl border border-gray-200 bg-white p-5">
         <h3 className="mb-1 text-sm font-semibold text-gray-900">Actividad diaria (últimos 30 días)</h3>
-        <p className="mb-4 text-xs text-gray-500">Sesiones KNAAS por día</p>
+        <p className="mb-4 text-xs text-gray-500">Sesiones IA por día</p>
         <MiniBarChart data={data.dailyUsage} valueKey="sessions" color="bg-blue-400" height={64} />
         <div className="mt-2 flex justify-between text-[10px] text-gray-400">
           <span>{data.dailyUsage[0]?.date.slice(5)}</span>

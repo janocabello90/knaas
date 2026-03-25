@@ -223,7 +223,7 @@ export default function MetricasPage() {
           <BarChart3 size={40} className="mx-auto mb-3 text-gray-400" />
           <p className="mb-2 font-medium text-gray-600">Aún no tienes métricas registradas</p>
           <p className="text-sm text-gray-500">
-            Empieza registrando los KPIs del mes actual para que KNAAS pueda darte recomendaciones personalizadas.
+            Empieza registrando los KPIs del mes actual para que la Academia IA pueda darte recomendaciones personalizadas.
           </p>
           <button
             onClick={() => loadMonthData(getCurrentMonthYear())}

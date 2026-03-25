@@ -37,9 +37,9 @@ export default function LoginPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600">
             <GraduationCap size={32} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">KNAAS</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Academia</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Knowledge Navigator & Adaptive Assistance System
+            Plataforma de mentoring para fisioterapeutas
           </p>
           <p className="text-xs text-gray-400">FisioReferentes</p>
         </div>

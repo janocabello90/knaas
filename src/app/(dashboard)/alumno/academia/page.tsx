@@ -53,7 +53,7 @@ function ApiKeyModal({ onClose }: { onClose: () => void }) {
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900">Configurar API Key</h2>
-            <p className="text-sm text-gray-500">Necesaria para activar KNAAS</p>
+            <p className="text-sm text-gray-500">Necesaria para activar Academia IA</p>
           </div>
         </div>
 
@@ -61,7 +61,7 @@ function ApiKeyModal({ onClose }: { onClose: () => void }) {
           <div className="rounded-xl bg-blue-50 p-4">
             <p className="mb-2 font-semibold text-blue-900">¿Qué es esto?</p>
             <p className="text-blue-800">
-              KNAAS funciona con Claude, la IA de Anthropic. Para usarlo necesitas una API key — es como una contraseña que conecta tu cuenta con el servicio de IA.
+              Academia IA funciona con Claude, la IA de Anthropic. Para usarlo necesitas una API key — es como una contraseña que conecta tu cuenta con el servicio de IA.
             </p>
           </div>
 
@@ -98,7 +98,7 @@ function ApiKeyModal({ onClose }: { onClose: () => void }) {
 
           <div className="rounded-xl bg-gray-50 p-4">
             <p className="text-xs text-gray-500">
-              Tu API key se almacena de forma segura y solo se usa para las conversaciones de KNAAS.
+              Tu API key se almacena de forma segura y solo se usa para las conversaciones de Academia IA.
               Ningún dato de tu clínica sale del sistema. Puedes cambiarla o eliminarla en cualquier momento.
             </p>
           </div>
@@ -120,7 +120,7 @@ export default function KnaasPage() {
     {
       role: "assistant",
       content:
-        "¡Hola! Soy el KNAAS, tu asistente del programa ACTIVA de FisioReferentes. Conozco tu clínica, tus números y el trabajo que has hecho hasta aquí.\n\n¿En qué puedo ayudarte hoy? Puedo acompañarte en tu paso actual, analizar una decisión o generar un borrador de cualquier output del programa.",
+        "¡Hola! Soy tu asistente IA del programa ACTIVA de FisioReferentes. Conozco tu clínica, tus números y el trabajo que has hecho hasta aquí.\n\n¿En qué puedo ayudarte hoy? Puedo acompañarte en tu paso actual, analizar una decisión o generar un borrador de cualquier output del programa.",
       timestamp: new Date(),
     },
   ]);
@@ -148,7 +148,7 @@ export default function KnaasPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/knaas", {
+      const res = await fetch("/api/academia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -196,9 +196,9 @@ export default function KnaasPage() {
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">KNAAS</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Academia IA</h1>
           <p className="text-sm text-gray-500">
-            Knowledge Navigator & Adaptive Assistance System
+            Tu asistente inteligente del programa
           </p>
         </div>
       </div>
@@ -305,7 +305,7 @@ export default function KnaasPage() {
           </button>
         </div>
         <p className="mt-2 text-center text-[10px] text-gray-400">
-          KNAAS usa la API de Anthropic con tu clave personal. Tus datos nunca salen del sistema.
+          Academia IA usa la API de Anthropic con tu clave personal. Tus datos nunca salen del sistema.
         </p>
       </div>
     </div>

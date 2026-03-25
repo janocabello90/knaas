@@ -75,7 +75,7 @@ function buildAlumnoSections(activeProgram: string | null): NavSection[] {
 
   const activaItems: NavItem[] = [
     { label: "Mi Programa", href: "/alumno/programa", icon: <BookOpen size={20} /> },
-    { label: "KNAAS", href: "/alumno/knaas", icon: <Bot size={20} /> },
+    { label: "Academia IA", href: "/alumno/academia", icon: <Bot size={20} /> },
     { label: "Mentorías", href: "/alumno/mentorias", icon: <Calendar size={20} /> },
     { label: "Mensajes", href: "/alumno/mensajes", icon: <Mail size={20} />, badgeId: "unread-messages" },
   ];
@@ -229,7 +229,7 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
           <div className="flex items-center gap-2">
             <GraduationCap size={28} className="text-blue-600" />
             <div>
-              <p className="text-sm font-bold text-gray-900">KNAAS</p>
+              <p className="text-sm font-bold text-gray-900">Academia</p>
               <p className="text-[10px] text-gray-500">FisioReferentes</p>
             </div>
           </div>

@@ -195,7 +195,7 @@ export default function SubirDocumentoPage() {
           Subir documento a Cerebro FR
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          El contenido se extrae automáticamente y KNAAS lo usará para dar
+          El contenido se extrae automáticamente y la Academia IA lo usará para dar
           mejores respuestas a los alumnos.
         </p>
       </div>
@@ -339,7 +339,7 @@ export default function SubirDocumentoPage() {
             Descripción / Contexto
           </label>
           <p className="mt-1 text-xs text-gray-500">
-            Describe qué contiene este documento. KNAAS usa esta descripción
+            Describe qué contiene este documento. La Academia IA usa esta descripción
             para decidir cuándo es relevante mostrarlo a un alumno.
           </p>
           <textarea
@@ -433,7 +433,7 @@ export default function SubirDocumentoPage() {
               Contenido del documento *
             </label>
             <p className="mt-1 text-xs text-gray-500">
-              Pega aquí el contenido completo. KNAAS lo usará como referencia.
+              Pega aquí el contenido completo. La Academia IA lo usará como referencia.
             </p>
             <textarea
               id="content"

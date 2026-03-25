@@ -1,5 +1,5 @@
 /**
- * KNAAS — Central email sending service.
+ * Academia — Central email sending service.
  *
  * All transactional emails go through this module.
  * Uses Resend with lazy init (build-safe).

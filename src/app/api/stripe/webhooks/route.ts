@@ -201,7 +201,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
       // Welcome email (if new enrollment)
       if (cohort?.name) {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://knaas.vercel.app";
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://academia.fisioreferentes.com";
         sendWelcome(user.email, {
           firstName: user.firstName || "Alumno/a",
           cohortName: cohort.name,

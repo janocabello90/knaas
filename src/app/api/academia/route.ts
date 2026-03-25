@@ -14,7 +14,7 @@ function buildSystemPrompt(
 ) {
   const step = ACTIVA_STEPS[stepNumber - 1];
 
-  const base = `Eres el KNAAS — el asistente de acompañamiento del programa ACTIVA de De Fisio a Empresario.
+  const base = `Eres el asistente IA de la Academia de FisioReferentes — el acompañamiento del programa ACTIVA de De Fisio a Empresario.
 Tu función es acompañar a ${userName} en la transformación de su clínica de fisioterapia en un negocio estructurado y rentable.
 No eres un chatbot genérico. Conoces su clínica, sus números y el trabajo que ha hecho hasta aquí.
 
@@ -297,7 +297,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ response: assistantMessage });
   } catch (error: unknown) {
-    console.error("KNAAS API error:", error);
+    console.error("Academia API error:", error);
     const message = error instanceof Error ? error.message : "Error interno del servidor";
     return NextResponse.json({ error: message }, { status: 500 });
   }

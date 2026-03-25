@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "KNAAS | FisioReferentes",
-  description: "Knowledge Navigator & Adaptive Assistance System - Plataforma de mentoring para fisioterapeutas",
+  title: "Academia | FisioReferentes",
+  description: "Academia de FisioReferentes - Plataforma de mentoring para fisioterapeutas",
 };
 
 export default function RootLayout({

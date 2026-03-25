@@ -157,7 +157,7 @@ export default function AjustesPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Ajustes</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Configura tu cuenta, perfil y las integraciones de KNAAS
+          Configura tu cuenta, perfil y las integraciones de la Academia
         </p>
       </div>
 
@@ -353,7 +353,7 @@ export default function AjustesPage() {
         <div className="rounded-xl border border-gray-200 bg-white p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">API Key de Anthropic</h2>
           <p className="mb-4 text-sm text-gray-600">
-            Tu API key de Anthropic se usa para alimentar KNAAS. Se almacena de forma segura.
+            Tu API key de Anthropic se usa para alimentar la Academia IA. Se almacena de forma segura.
           </p>
 
           {apiKeyState?.exists && (

@@ -38,7 +38,7 @@ export default async function AdminDashboard() {
       color: "bg-purple-50 text-purple-600",
     },
     {
-      label: "Sesiones KNAAS",
+      label: "Sesiones IA",
       value: stats.totalSessions,
       icon: <Activity size={24} />,
       color: "bg-amber-50 text-amber-600",
