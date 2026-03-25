@@ -158,8 +158,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ payments, cohorts, stats, students });
   } catch (error) {
-    console.error("Error fetching payments:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : "";
+    console.error("Error fetching payments:", errMsg);
+    console.error("Stack:", errStack);
+    return NextResponse.json(
+      { error: `Error al cargar pagos: ${errMsg}` },
+      { status: 500 }
+    );
   }
 }
 

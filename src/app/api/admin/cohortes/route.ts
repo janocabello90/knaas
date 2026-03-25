@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Transform data for response
-    const response: CohortListItem[] = cohorts.map((cohort) => {
+    const cohortList: CohortListItem[] = cohorts.map((cohort) => {
       // Calculate revenue stats
       const completedPayments = cohort.payments.filter(
         (p) => p.status === "COMPLETED"
@@ -163,7 +163,20 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json(response, { status: 200 });
+    // Stats
+    const totalStudents = cohortList.reduce((sum, c) => sum + c.enrollmentCount, 0);
+    const activeCohorts = cohortList.filter((c) => c.status === "ACTIVE").length;
+    const totalRevenueAll = cohortList.reduce((sum, c) => sum + c.revenueStats.totalRevenue, 0);
+
+    return NextResponse.json({
+      cohorts: cohortList,
+      stats: {
+        totalCohorts: cohortList.length,
+        activeCohorts,
+        totalStudents,
+        totalRevenue: totalRevenueAll,
+      },
+    }, { status: 200 });
   } catch (error: unknown) {
     console.error("GET /api/admin/cohortes error:", error);
     const message =

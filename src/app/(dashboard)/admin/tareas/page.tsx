@@ -203,11 +203,13 @@ export default function TareasPage() {
     setEditingTask(null);
   };
 
-  // Filter logic
+  // Filter logic — in kanban mode always show all statuses in their columns
   const filteredTasks = tasks.filter((t) => {
     if (filterCategory !== "all" && t.category !== filterCategory) return false;
-    if (filterStatus === "active" && t.status === "COMPLETED") return false;
-    if (filterStatus === "completed" && t.status !== "COMPLETED") return false;
+    if (viewMode === "list") {
+      if (filterStatus === "active" && t.status === "COMPLETED") return false;
+      if (filterStatus === "completed" && t.status !== "COMPLETED") return false;
+    }
     if (filterPerson !== "all") {
       if (filterPerson === "unassigned") {
         if (t.assignedTo) return false;

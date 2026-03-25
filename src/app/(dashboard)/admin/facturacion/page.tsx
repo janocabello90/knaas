@@ -144,7 +144,10 @@ export default function FacturacionPage() {
       if (searchQuery) params.set("search", searchQuery);
 
       const res = await fetch(`/api/admin/facturacion?${params}`);
-      if (!res.ok) throw new Error("Error al cargar pagos");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Error al cargar pagos (${res.status})`);
+      }
       const data = await res.json();
       setPayments(data.payments);
       setCohorts(data.cohorts);

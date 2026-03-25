@@ -2,7 +2,7 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDateShort } from "@/lib/utils";
 import Link from "next/link";
-import { Plus, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import type { StepProgress } from "@prisma/client";
 
 type AlumnoWithRelations = Awaited<ReturnType<typeof getAlumnos>>[number];
@@ -40,20 +40,11 @@ export default async function AlumnosPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Alumnos</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            {alumnos.length} alumno{alumnos.length !== 1 ? "s" : ""} registrado{alumnos.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-        <Link
-          href="/admin/alumnos/nuevo"
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
-        >
-          <Plus size={16} />
-          Crear alumno
-        </Link>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Alumnos</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          {alumnos.length} alumno{alumnos.length !== 1 ? "s" : ""} registrado{alumnos.length !== 1 ? "s" : ""}
+        </p>
       </div>
 
       {/* Search */}
@@ -97,10 +88,7 @@ export default async function AlumnosPage() {
             {alumnos.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-500">
-                  No hay alumnos registrados todavía.
-                  <Link href="/admin/alumnos/nuevo" className="ml-1 text-blue-600 hover:underline">
-                    Crear el primero
-                  </Link>
+                  No hay alumnos registrados todavía. Se crean automáticamente desde Accesos.
                 </td>
               </tr>
             ) : (
