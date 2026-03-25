@@ -4,9 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createSupabaseServerClient();
 
     // Check auth - SUPERADMIN only
@@ -18,19 +19,19 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userRole = await prisma.user.findUnique({
-      where: { id: user.id },
+    const dbUser = await prisma.user.findUnique({
+      where: { supabaseAuthId: user.id },
       select: { role: true },
     });
 
-    if (userRole?.role !== "SUPERADMIN") {
+    if (dbUser?.role !== "SUPERADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { isActive, maxUses, expiresAt } = await request.json();
 
     // Build update data
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     if (isActive !== undefined) updateData.isActive = isActive;
     if (maxUses !== undefined) updateData.maxUses = maxUses;
     if (expiresAt !== undefined)
@@ -38,7 +39,7 @@ export async function PUT(
 
     // Update invitation
     const invitation = await prisma.invitationLink.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: {
         cohort: {
@@ -47,7 +48,7 @@ export async function PUT(
             name: true,
           },
         },
-        creator: {
+        createdBy: {
           select: {
             firstName: true,
             lastName: true,
@@ -57,8 +58,9 @@ export async function PUT(
     });
 
     return NextResponse.json(invitation);
-  } catch (error: any) {
-    if (error.code === "P2025") {
+  } catch (error: unknown) {
+    const prismaError = error as { code?: string };
+    if (prismaError.code === "P2025") {
       return NextResponse.json(
         { error: "Invitation link not found" },
         { status: 404 }
@@ -75,9 +77,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createSupabaseServerClient();
 
     // Check auth - SUPERADMIN only
@@ -89,23 +92,24 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userRole = await prisma.user.findUnique({
-      where: { id: user.id },
+    const dbUser = await prisma.user.findUnique({
+      where: { supabaseAuthId: user.id },
       select: { role: true },
     });
 
-    if (userRole?.role !== "SUPERADMIN") {
+    if (dbUser?.role !== "SUPERADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Delete invitation
     await prisma.invitationLink.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    if (error.code === "P2025") {
+  } catch (error: unknown) {
+    const prismaError = error as { code?: string };
+    if (prismaError.code === "P2025") {
       return NextResponse.json(
         { error: "Invitation link not found" },
         { status: 404 }

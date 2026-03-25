@@ -95,7 +95,7 @@ async function checkSuperAdminAuth(request: NextRequest) {
 // ── GET: Single cohort with full details ────────────────────────────────
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await checkSuperAdminAuth(request);
@@ -103,7 +103,7 @@ export async function GET(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     // Validate ID format
     if (!id || id.trim() === "") {
@@ -236,7 +236,7 @@ export async function GET(
 // ── PUT: Update cohort fields ──────────────────────────────────────────
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await checkSuperAdminAuth(request);
@@ -244,7 +244,7 @@ export async function PUT(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     // Validate ID format
     if (!id || id.trim() === "") {
@@ -439,7 +439,7 @@ export async function PUT(
 // ── DELETE: Delete cohort (only if no enrollments) ─────────────────────
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await checkSuperAdminAuth(request);
@@ -447,7 +447,7 @@ export async function DELETE(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     // Validate ID format
     if (!id || id.trim() === "") {
