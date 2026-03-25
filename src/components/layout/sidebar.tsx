@@ -52,6 +52,7 @@ const adminSections: NavSection[] = [
       { label: "Mentorías", href: "/admin/mentorias", icon: <Calendar size={20} /> },
       { label: "Mensajes", href: "/admin/mensajes", icon: <Mail size={20} />, badgeId: "unread-messages" },
       { label: "Accesos", href: "/admin/accesos", icon: <KeyRound size={20} /> },
+      { label: "Facturación", href: "/admin/facturacion", icon: <CreditCard size={20} /> },
       { label: "Monitoring IA", href: "/admin/monitoring", icon: <Activity size={20} /> },
       { label: "Tareas", href: "/admin/tareas", icon: <ClipboardCheck size={20} /> },
     ],
