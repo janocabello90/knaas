@@ -126,8 +126,11 @@ export async function GET() {
       payments: user.payments,
     });
   } catch (error) {
-    console.error("GET /api/alumno/ajustes error:", error);
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : "";
+    console.error("GET /api/alumno/ajustes error:", errMsg);
+    console.error("GET /api/alumno/ajustes stack:", errStack);
+    return NextResponse.json({ error: `Error al cargar datos: ${errMsg}` }, { status: 500 });
   }
 }
 

@@ -257,6 +257,26 @@ export default function AlumnoAjustesPage() {
     );
   }
 
+  // If API failed and we have no profile data, show error state
+  if (!profile) {
+    return (
+      <div className="mx-auto max-w-5xl">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Mi Cuenta</h1>
+        </div>
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-8 text-center">
+          <p className="text-sm text-red-700">{error || "No se pudieron cargar tus datos. Inténtalo de nuevo."}</p>
+          <button
+            onClick={fetchData}
+            className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-5xl">
       {/* Header */}
