@@ -17,26 +17,7 @@ interface CreateCohortRequest {
   installmentCount?: number;
 }
 
-interface CohortListItem {
-  id: string;
-  name: string;
-  program: string;
-  description?: string;
-  status: string;
-  startDate: string;
-  endDate?: string;
-  maxStudents?: number;
-  enrollmentCount: number;
-  mentorNames: string[];
-  invitationLinkCount: number;
-  revenueStats: {
-    totalRevenue: number;
-    completedPayments: number;
-    pendingPayments: number;
-    totalPending: number;
-  };
-  createdAt: string;
-}
+// Response matches frontend Cohort interface
 
 // ── Auth Helper ────────────────────────────────────────────────────────
 async function checkSuperAdminAuth(request: NextRequest) {
@@ -92,6 +73,9 @@ export async function GET(request: NextRequest) {
         startDate: true,
         endDate: true,
         maxStudents: true,
+        price: true,
+        installmentPrice: true,
+        installmentCount: true,
         createdAt: true,
         enrollments: {
           select: { id: true },
@@ -103,6 +87,7 @@ export async function GET(request: NextRequest) {
                 id: true,
                 firstName: true,
                 lastName: true,
+                photo: true,
               },
             },
           },
@@ -121,52 +106,49 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    // Transform data for response
-    const cohortList: CohortListItem[] = cohorts.map((cohort) => {
-      // Calculate revenue stats
+    // Transform data to match frontend Cohort interface
+    const cohortList = cohorts.map((cohort) => {
       const completedPayments = cohort.payments.filter(
         (p) => p.status === "COMPLETED"
-      );
-      const pendingPayments = cohort.payments.filter(
-        (p) => p.status === "PENDING"
       );
       const totalRevenue = completedPayments.reduce(
         (sum, p) => sum + p.totalAmount,
         0
       );
-      const totalPending = pendingPayments.reduce((sum, p) => sum + p.totalAmount, 0);
 
-      // Get mentor names
-      const mentorNames = cohort.mentors.map(
-        (m) => `${m.user.firstName} ${m.user.lastName}`
-      );
+      const currentStudents = cohort.enrollments.length;
+      const maxStudents = cohort.maxStudents || 20;
+      const price = cohort.price || 0;
+      const expectedRevenue = price * currentStudents || totalRevenue || 1;
 
       return {
         id: cohort.id,
         name: cohort.name,
         program: cohort.program,
-        description: cohort.description || undefined,
+        description: cohort.description || "",
         status: cohort.status,
         startDate: cohort.startDate.toISOString(),
-        endDate: cohort.endDate ? cohort.endDate.toISOString() : undefined,
-        maxStudents: cohort.maxStudents || undefined,
-        enrollmentCount: cohort.enrollments.length,
-        mentorNames,
-        invitationLinkCount: cohort.invitationLinks.length,
-        revenueStats: {
-          totalRevenue,
-          completedPayments: completedPayments.length,
-          pendingPayments: pendingPayments.length,
-          totalPending,
-        },
+        endDate: cohort.endDate ? cohort.endDate.toISOString() : cohort.startDate.toISOString(),
+        maxStudents,
+        currentStudents,
+        price,
+        installmentPrice: cohort.installmentPrice || 0,
+        installmentCount: cohort.installmentCount || 1,
+        mentors: cohort.mentors.map((m) => ({
+          id: m.user.id,
+          name: `${m.user.firstName} ${m.user.lastName}`,
+          avatar: m.user.photo || undefined,
+        })),
+        totalRevenue,
+        expectedRevenue,
         createdAt: cohort.createdAt.toISOString(),
       };
     });
 
     // Stats
-    const totalStudents = cohortList.reduce((sum, c) => sum + c.enrollmentCount, 0);
+    const totalStudents = cohortList.reduce((sum, c) => sum + c.currentStudents, 0);
     const activeCohorts = cohortList.filter((c) => c.status === "ACTIVE").length;
-    const totalRevenueAll = cohortList.reduce((sum, c) => sum + c.revenueStats.totalRevenue, 0);
+    const totalRevenueAll = cohortList.reduce((sum, c) => sum + c.totalRevenue, 0);
 
     return NextResponse.json({
       cohorts: cohortList,
