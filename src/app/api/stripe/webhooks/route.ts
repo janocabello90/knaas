@@ -2,6 +2,11 @@ import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import {
+  sendPaymentConfirmation,
+  sendWelcome,
+  sendPaymentRefunded,
+} from "@/lib/emails/send";
 
 // Disable body parsing — Stripe needs the raw body for signature verification
 export const dynamic = "force-dynamic";
@@ -161,6 +166,39 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     });
   }
 
+  // Send emails
+  if (userId) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, firstName: true },
+    });
+    const cohort = cohortId
+      ? await prisma.cohort.findUnique({ where: { id: cohortId }, select: { name: true } })
+      : null;
+
+    if (user?.email) {
+      // Payment confirmation
+      sendPaymentConfirmation(user.email, {
+        firstName: user.firstName || "Alumno/a",
+        amount: (session.amount_total || 0) / 100,
+        currency: session.currency?.toUpperCase() || "EUR",
+        method: "STRIPE",
+        cohortName: cohort?.name || undefined,
+        paidAt: new Date(),
+      }).catch((err) => console.error("[Email] Failed to send payment confirmation:", err));
+
+      // Welcome email (if new enrollment)
+      if (cohort?.name) {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://knaas.vercel.app";
+        sendWelcome(user.email, {
+          firstName: user.firstName || "Alumno/a",
+          cohortName: cohort.name,
+          loginUrl: `${appUrl}/programa`,
+        }).catch((err) => console.error("[Email] Failed to send welcome:", err));
+      }
+    }
+  }
+
   console.log(
     `✅ Checkout completed: ${session.id}, user: ${userId}, cohort: ${cohortId}`
   );
@@ -222,6 +260,20 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
         refundedAt: new Date(),
       },
     });
+
+    // Send refund email
+    const user = await prisma.user.findUnique({
+      where: { id: existing.userId },
+      select: { email: true, firstName: true },
+    });
+    if (user?.email) {
+      sendPaymentRefunded(user.email, {
+        firstName: user.firstName || "Alumno/a",
+        amount: existing.amount,
+        currency: existing.currency,
+        invoiceNumber: existing.invoiceNumber || undefined,
+      }).catch((err) => console.error("[Email] Failed to send refund email:", err));
+    }
   }
 
   console.log(`🔄 Charge refunded: ${charge.id}`);

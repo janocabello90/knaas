@@ -1,6 +1,11 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  sendTransferPending,
+  sendTransferVerified,
+  sendPaymentRefunded,
+} from "@/lib/emails/send";
 
 async function getAuthAdmin() {
   const supabase = await createSupabaseServerClient();
@@ -203,6 +208,31 @@ export async function POST(request: NextRequest) {
       createdPayments.push(payment);
     }
 
+    // Send email notification for transfer payments
+    if (method === "TRANSFERENCIA") {
+      const student = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, firstName: true },
+      });
+      const cohort = cohortId
+        ? await prisma.cohort.findUnique({ where: { id: cohortId }, select: { name: true } })
+        : null;
+
+      if (student?.email) {
+        // Send email for first payment (or single payment)
+        const firstPayment = createdPayments[0];
+        sendTransferPending(student.email, {
+          firstName: student.firstName || "Alumno/a",
+          amount: firstPayment.amount,
+          currency: "EUR",
+          cohortName: cohort?.name || undefined,
+          invoiceNumber: firstPayment.invoiceNumber || undefined,
+          installmentNumber: firstPayment.installmentNumber || undefined,
+          totalInstallments: firstPayment.totalInstallments || undefined,
+        }).catch((err) => console.error("[Email] Failed to send transfer pending:", err));
+      }
+    }
+
     return NextResponse.json(
       { payments: createdPayments, count: createdPayments.length },
       { status: 201 }
@@ -234,7 +264,10 @@ export async function PUT(request: NextRequest) {
 
     const payment = await prisma.payment.findUnique({
       where: { id: paymentId },
-      include: { user: { select: { id: true, email: true, firstName: true } } },
+      include: {
+        user: { select: { id: true, email: true, firstName: true } },
+        cohort: { select: { name: true } },
+      },
     });
 
     if (!payment) {
@@ -255,6 +288,16 @@ export async function PUT(request: NextRequest) {
               : "✅ Transferencia verificada por admin",
           },
         });
+        // Send verification email
+        if (payment.user?.email) {
+          sendTransferVerified(payment.user.email, {
+            firstName: payment.user.firstName || "Alumno/a",
+            amount: payment.amount,
+            currency: payment.currency,
+            cohortName: payment.cohort?.name || undefined,
+            invoiceNumber: payment.invoiceNumber || undefined,
+          }).catch((err) => console.error("[Email] Failed to send transfer verified:", err));
+        }
         break;
 
       case "mark_failed":
@@ -272,6 +315,15 @@ export async function PUT(request: NextRequest) {
             refundedAt: new Date(),
           },
         });
+        // Send refund email
+        if (payment.user?.email) {
+          sendPaymentRefunded(payment.user.email, {
+            firstName: payment.user.firstName || "Alumno/a",
+            amount: payment.amount,
+            currency: payment.currency,
+            invoiceNumber: payment.invoiceNumber || undefined,
+          }).catch((err) => console.error("[Email] Failed to send refund email:", err));
+        }
         break;
 
       default:
