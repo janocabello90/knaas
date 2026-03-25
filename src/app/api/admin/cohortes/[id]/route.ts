@@ -423,7 +423,6 @@ export async function PUT(
         installmentPrice: true,
         installmentCount: true,
         createdAt: true,
-        updatedAt: true,
       },
     });
 
