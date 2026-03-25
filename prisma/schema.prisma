@@ -67,6 +67,29 @@ enum CohortStatus {
   ARCHIVED
 }
 
+enum BusinessType {
+  PARTICULAR
+  AUTONOMO
+  EMPRESA
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentType {
+  SINGLE
+  INSTALLMENT
+}
+
+enum InvitationLinkType {
+  PAYMENT   // Requires Stripe payment
+  FREE      // Direct access (beca, equipo)
+}
+
 enum EnrollmentStatus {
   PENDING
   ACTIVE
@@ -101,20 +124,43 @@ model User {
   onboardingDone  Boolean  @default(false) @map("onboarding_done")
   apiKeyEncrypted String?  @map("api_key_encrypted")
   stripeCustomerId String? @map("stripe_customer_id")
+
+  // ── Billing / Facturación ──
+  fiscalName       String?       @map("fiscal_name")     // Nombre fiscal
+  nifCif           String?       @map("nif_cif")         // NIF / CIF
+  businessType     BusinessType? @map("business_type")   // PARTICULAR, AUTONOMO, EMPRESA
+  companyName      String?       @map("company_name")    // Razón social (if EMPRESA)
+  fiscalAddress    String?       @map("fiscal_address")
+  fiscalCity       String?       @map("fiscal_city")
+  fiscalProvince   String?       @map("fiscal_province")
+  fiscalPostalCode String?       @map("fiscal_postal_code")
+  fiscalCountry    String?       @default("España") @map("fiscal_country")
+  irpfApplies      Boolean       @default(false) @map("irpf_applies") // Retención IRPF
+
+  // ── Shipping / Envío ──
+  shippingName       String?  @map("shipping_name")
+  shippingAddress    String?  @map("shipping_address")
+  shippingCity       String?  @map("shipping_city")
+  shippingProvince   String?  @map("shipping_province")
+  shippingPostalCode String?  @map("shipping_postal_code")
+  shippingCountry    String?  @default("España") @map("shipping_country")
+
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   // Relations
-  clinics             Clinic[]
-  enrollments         Enrollment[]
-  mentorCohorts       CohortMentor[]
-  sentMessages        Message[]           @relation("MessageSender")
-  receivedMessages    Message[]           @relation("MessageRecipient")
-  uploadedDocuments   CerebroDocument[]
-  validatedOutputs    Output[]            @relation("OutputValidator")
-  mentoringSessions   MentoringAttendee[]
-  assignedTasks       AdminTask[]         @relation("TaskAssignee")
-  createdTasks        AdminTask[]         @relation("TaskCreator")
+  clinics              Clinic[]
+  enrollments          Enrollment[]
+  mentorCohorts        CohortMentor[]
+  sentMessages         Message[]           @relation("MessageSender")
+  receivedMessages     Message[]           @relation("MessageRecipient")
+  uploadedDocuments    CerebroDocument[]
+  validatedOutputs     Output[]            @relation("OutputValidator")
+  mentoringSessions    MentoringAttendee[]
+  assignedTasks        AdminTask[]         @relation("TaskAssignee")
+  createdTasks         AdminTask[]         @relation("TaskCreator")
+  payments             Payment[]
+  createdInvitations   InvitationLink[]    @relation("InvitationCreator")
 
   @@map("users")
 }
@@ -150,13 +196,18 @@ model Clinic {
 // ============================================================
 
 model Cohort {
-  id        String       @id @default(uuid())
-  program   Program
-  name      String       // e.g. "ACTIVA-Abril2026"
-  startDate DateTime     @map("start_date")
-  endDate   DateTime?    @map("end_date")
-  status    CohortStatus @default(DRAFT)
-  createdAt DateTime     @default(now()) @map("created_at")
+  id              String       @id @default(uuid())
+  program         Program
+  name            String       // e.g. "ACTIVA-Abril2026"
+  description     String?
+  startDate       DateTime     @map("start_date")
+  endDate         DateTime?    @map("end_date")
+  status          CohortStatus @default(DRAFT)
+  maxStudents     Int?         @map("max_students")
+  price           Float?       // Single payment price in EUR
+  installmentPrice Float?      @map("installment_price") // Per installment
+  installmentCount Int?        @map("installment_count") // Number of installments
+  createdAt       DateTime     @default(now()) @map("created_at")
 
   // Relations
   enrollments      Enrollment[]
@@ -164,6 +215,8 @@ model Cohort {
   mentoringSession MentoringSession[]
   messages         Message[]
   adminTasks       AdminTask[]
+  invitationLinks  InvitationLink[]
+  payments         Payment[]
 
   @@map("cohorts")
 }
@@ -197,6 +250,7 @@ model Enrollment {
   outputs              Output[]
   conversationSessions ConversationSession[]
   alerts               Alert[]
+  payments             Payment[]
 
   @@unique([userId, cohortId])
   @@map("enrollments")
@@ -441,4 +495,60 @@ model AdminTask {
   cohort     Cohort? @relation(fields: [cohortId], references: [id], onDelete: SetNull)
 
   @@map("admin_tasks")
+}
+
+// ============================================================
+// PAYMENTS
+// ============================================================
+
+model Payment {
+  id                    String        @id @default(uuid())
+  userId                String        @map("user_id")
+  cohortId              String?       @map("cohort_id")
+  enrollmentId          String?       @map("enrollment_id")
+  amount                Float         // Amount in EUR
+  currency              String        @default("EUR")
+  type                  PaymentType   @default(SINGLE)
+  status                PaymentStatus @default(PENDING)
+  installmentNumber     Int?          @map("installment_number")  // 1, 2, 3...
+  totalInstallments     Int?          @map("total_installments")
+  stripePaymentIntentId String?       @map("stripe_payment_intent_id")
+  stripeSessionId       String?       @map("stripe_session_id")
+  stripeInvoiceId       String?       @map("stripe_invoice_id")
+  invoiceNumber         String?       @map("invoice_number")     // FR-2026-001
+  notes                 String?
+  paidAt                DateTime?     @map("paid_at")
+  refundedAt            DateTime?     @map("refunded_at")
+  createdAt             DateTime      @default(now()) @map("created_at")
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cohort     Cohort?     @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+  enrollment Enrollment? @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+
+  @@map("payments")
+}
+
+// ============================================================
+// INVITATION / PAYMENT LINKS
+// ============================================================
+
+model InvitationLink {
+  id               String             @id @default(uuid())
+  code             String             @unique          // Unique URL slug
+  type             InvitationLinkType @default(PAYMENT)
+  cohortId         String             @map("cohort_id")
+  email            String?            // If restricted to specific email
+  maxUses          Int                @default(1) @map("max_uses")
+  usedCount        Int                @default(0) @map("used_count")
+  price            Float?             // Override cohort price if needed
+  installmentsOk   Boolean            @default(true) @map("installments_ok") // Allow installment option
+  expiresAt        DateTime?          @map("expires_at")
+  isActive         Boolean            @default(true) @map("is_active")
+  createdById      String             @map("created_by_id")
+  createdAt        DateTime           @default(now()) @map("created_at")
+
+  cohort    Cohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("InvitationCreator", fields: [createdById], references: [id])
+
+  @@map("invitation_links")
 }

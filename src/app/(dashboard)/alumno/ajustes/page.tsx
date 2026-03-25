@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Camera, Save, User, MapPin, Briefcase, Loader2 } from "lucide-react";
+import { Camera, Save, User, MapPin, Briefcase, Loader2, Receipt, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ProfileData = {
@@ -20,6 +20,24 @@ type ProfileData = {
   yearsExperience: string;
   specialty: string;
   motivation: string;
+  // Billing
+  fiscalName: string;
+  nifCif: string;
+  businessType: string;
+  companyName: string;
+  fiscalAddress: string;
+  fiscalCity: string;
+  fiscalProvince: string;
+  fiscalPostalCode: string;
+  fiscalCountry: string;
+  irpfApplies: boolean;
+  // Shipping
+  shippingName: string;
+  shippingAddress: string;
+  shippingCity: string;
+  shippingProvince: string;
+  shippingPostalCode: string;
+  shippingCountry: string;
 };
 
 export default function AlumnoAjustesPage() {
@@ -39,6 +57,22 @@ export default function AlumnoAjustesPage() {
     yearsExperience: "",
     specialty: "",
     motivation: "",
+    fiscalName: "",
+    nifCif: "",
+    businessType: "",
+    companyName: "",
+    fiscalAddress: "",
+    fiscalCity: "",
+    fiscalProvince: "",
+    fiscalPostalCode: "",
+    fiscalCountry: "España",
+    irpfApplies: false,
+    shippingName: "",
+    shippingAddress: "",
+    shippingCity: "",
+    shippingProvince: "",
+    shippingPostalCode: "",
+    shippingCountry: "España",
   });
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,6 +100,22 @@ export default function AlumnoAjustesPage() {
           yearsExperience: data.yearsExperience ? String(data.yearsExperience) : "",
           specialty: data.specialty || "",
           motivation: data.motivation || "",
+          fiscalName: data.fiscalName || "",
+          nifCif: data.nifCif || "",
+          businessType: data.businessType || "",
+          companyName: data.companyName || "",
+          fiscalAddress: data.fiscalAddress || "",
+          fiscalCity: data.fiscalCity || "",
+          fiscalProvince: data.fiscalProvince || "",
+          fiscalPostalCode: data.fiscalPostalCode || "",
+          fiscalCountry: data.fiscalCountry || "España",
+          irpfApplies: data.irpfApplies || false,
+          shippingName: data.shippingName || "",
+          shippingAddress: data.shippingAddress || "",
+          shippingCity: data.shippingCity || "",
+          shippingProvince: data.shippingProvince || "",
+          shippingPostalCode: data.shippingPostalCode || "",
+          shippingCountry: data.shippingCountry || "España",
         });
         if (data.photo) setPhotoPreview(data.photo);
         setLoading(false);
@@ -323,6 +373,141 @@ export default function AlumnoAjustesPage() {
             rows={3}
             className="block w-full resize-none rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
+        </div>
+      </div>
+
+      {/* Datos de facturación */}
+      <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Receipt size={18} className="text-amber-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Datos de facturación</h2>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Tipo</label>
+            <select
+              value={form.businessType}
+              onChange={(e) => updateField("businessType", e.target.value)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">Seleccionar...</option>
+              <option value="PARTICULAR">Particular</option>
+              <option value="AUTONOMO">Autónomo</option>
+              <option value="EMPRESA">Empresa</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Nombre fiscal</label>
+            <input
+              type="text"
+              value={form.fiscalName}
+              onChange={(e) => updateField("fiscalName", e.target.value)}
+              placeholder="Nombre completo o razón social"
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">NIF / CIF</label>
+            <input
+              type="text"
+              value={form.nifCif}
+              onChange={(e) => updateField("nifCif", e.target.value)}
+              placeholder="12345678A"
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {form.businessType === "EMPRESA" && (
+          <div className="mt-4">
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Razón social</label>
+            <input
+              type="text"
+              value={form.companyName}
+              onChange={(e) => updateField("companyName", e.target.value)}
+              placeholder="Nombre de la empresa S.L."
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        )}
+
+        <div className="mt-4">
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">Dirección fiscal</label>
+          <input
+            type="text"
+            value={form.fiscalAddress}
+            onChange={(e) => updateField("fiscalAddress", e.target.value)}
+            placeholder="Calle, número, piso..."
+            className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+
+        <div className="mt-4 grid grid-cols-4 gap-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Ciudad</label>
+            <input type="text" value={form.fiscalCity} onChange={(e) => updateField("fiscalCity", e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Provincia</label>
+            <input type="text" value={form.fiscalProvince} onChange={(e) => updateField("fiscalProvince", e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Código postal</label>
+            <input type="text" value={form.fiscalPostalCode} onChange={(e) => updateField("fiscalPostalCode", e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">País</label>
+            <input type="text" value={form.fiscalCountry} onChange={(e) => updateField("fiscalCountry", e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.irpfApplies}
+              onChange={(e) => setForm((prev) => ({ ...prev, irpfApplies: e.target.checked }))}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-700">Aplicar retención de IRPF (soy autónomo/profesional)</span>
+          </label>
+        </div>
+      </div>
+
+      {/* Dirección de envío */}
+      <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Truck size={18} className="text-teal-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Dirección de envío</h2>
+          <span className="text-xs text-gray-400">(si es diferente a la fiscal)</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Nombre para envío</label>
+            <input type="text" value={form.shippingName} onChange={(e) => updateField("shippingName", e.target.value)} placeholder="Nombre completo del destinatario" className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div className="col-span-2">
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Dirección</label>
+            <input type="text" value={form.shippingAddress} onChange={(e) => updateField("shippingAddress", e.target.value)} placeholder="Calle, número, piso..." className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Ciudad</label>
+            <input type="text" value={form.shippingCity} onChange={(e) => updateField("shippingCity", e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Provincia</label>
+            <input type="text" value={form.shippingProvince} onChange={(e) => updateField("shippingProvince", e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Código postal</label>
+            <input type="text" value={form.shippingPostalCode} onChange={(e) => updateField("shippingPostalCode", e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">País</label>
+            <input type="text" value={form.shippingCountry} onChange={(e) => updateField("shippingCountry", e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
         </div>
       </div>
 
