@@ -3,8 +3,8 @@
 
 -- ─── Diagnostic Data (Paso 1 exercises) ────────────────────────
 CREATE TABLE IF NOT EXISTS diagnostic_data (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   year INTEGER NOT NULL,
   data JSONB NOT NULL DEFAULT '{}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS diagnostic_data (
 
 -- ─── Seguimiento Mensual (Monthly KPI tracking) ───────────────
 CREATE TABLE IF NOT EXISTS seguimiento_mensual (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   year INTEGER NOT NULL,
   mes INTEGER NOT NULL CHECK (mes BETWEEN 1 AND 12),
   fac_real DOUBLE PRECISION NOT NULL DEFAULT 0,
