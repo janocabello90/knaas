@@ -108,7 +108,18 @@ const EMPTY_12 = () => Array(12).fill(0);
 const DEFAULT_EJ1: Ej1Data = {
   aFac: EMPTY_12(), aSes: EMPTY_12(), aNew: EMPTY_12(),
   gPac: 0, gChurn: 0, gNps: 0,
-  srvs: [{ sid: 1, name: "Fisioterapia", mins: 45, precio: 45, facM: EMPTY_12(), sesM: EMPTY_12(), pac: 0 }],
+  srvs: [
+    { sid: 1, name: "Fisioterapia", mins: 45, precio: 45, facM: EMPTY_12(), sesM: EMPTY_12(), pac: 0 },
+    { sid: 2, name: "Aparatología", mins: 30, precio: 35, facM: EMPTY_12(), sesM: EMPTY_12(), pac: 0 },
+    { sid: 3, name: "Readaptación", mins: 60, precio: 50, facM: EMPTY_12(), sesM: EMPTY_12(), pac: 0 },
+    { sid: 4, name: "Gimnasio", mins: 60, precio: 30, facM: EMPTY_12(), sesM: EMPTY_12(), pac: 0 },
+    { sid: 5, name: "Osteopatía", mins: 50, precio: 55, facM: EMPTY_12(), sesM: EMPTY_12(), pac: 0 },
+    { sid: 6, name: "Podología", mins: 30, precio: 40, facM: EMPTY_12(), sesM: EMPTY_12(), pac: 0 },
+    { sid: 7, name: "Nutrición", mins: 45, precio: 50, facM: EMPTY_12(), sesM: EMPTY_12(), pac: 0 },
+    { sid: 8, name: "Psicología", mins: 50, precio: 60, facM: EMPTY_12(), sesM: EMPTY_12(), pac: 0 },
+    { sid: 9, name: "Traumatología / Servicios Médicos", mins: 30, precio: 80, facM: EMPTY_12(), sesM: EMPTY_12(), pac: 0 },
+    { sid: 10, name: "Estética", mins: 45, precio: 50, facM: EMPTY_12(), sesM: EMPTY_12(), pac: 0 },
+  ],
   wrks: [{ wid: 1, name: "", tipo: "Fisioterapeuta", hconv: 1800, pct: 100, srvIds: [1], vacM: EMPTY_12() }],
   gastos: [
     { id: 1, concepto: "Alquiler", partida: "LOCAL", valor: 0 },
