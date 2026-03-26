@@ -30,6 +30,7 @@ const statusIcons: Record<string, React.ReactNode> = {
 
 export default async function ProgramaPage() {
   const user = await requireRole(["ALUMNO"]);
+  const isAdmin = user.role === "SUPERADMIN" || user.role === "ADMIN";
 
   const enrollment = await prisma.enrollment.findFirst({
     where: { userId: user.id },
@@ -122,7 +123,7 @@ export default async function ProgramaPage() {
             <div className="space-y-3">
               {steps.map((step) => {
                 const progress = stepProgressMap.get(step.number);
-                const status = progress?.status ?? "LOCKED";
+                const status = progress?.status ?? (isAdmin ? "AVAILABLE" : "LOCKED");
                 const isActive = status === "IN_PROGRESS";
                 const isCompleted = status === "COMPLETED";
                 const isLocked = status === "LOCKED";
