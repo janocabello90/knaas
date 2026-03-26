@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 
-async function getAuthAlumno() {
+// Authenticate and return basic user (no risky includes)
+async function getAuthUser() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -11,9 +12,51 @@ async function getAuthAlumno() {
 
   const dbUser = await prisma.user.findUnique({
     where: { supabaseAuthId: user.id },
-    include: {
-      clinics: true,
-      enrollments: {
+  });
+
+  return dbUser;
+}
+
+// GET — Full profile, clinic, billing, enrollments, payments
+// Each relation is fetched separately so one failure doesn't kill everything
+export async function GET() {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    // Fetch clinics (safe — table existed from day 1)
+    let clinicData = null;
+    try {
+      const clinics = await prisma.clinic.findMany({
+        where: { userId: user.id },
+        take: 1,
+      });
+      const c = clinics[0] || null;
+      if (c) {
+        clinicData = {
+          id: c.id,
+          name: c.name,
+          address: c.address,
+          phone: c.phone,
+          email: c.email,
+          model: c.model,
+          cyclePhase: c.cyclePhase,
+          teamCount: c.teamCount,
+          services: c.services,
+          channels: c.channels,
+        };
+      }
+    } catch (err) {
+      console.error("ajustes: clinic fetch failed:", err instanceof Error ? err.message : err);
+    }
+
+    // Fetch enrollments
+    let enrollmentsList: Array<Record<string, unknown>> = [];
+    try {
+      const enrollments = await prisma.enrollment.findMany({
+        where: { userId: user.id },
         include: {
           cohort: {
             select: {
@@ -26,8 +69,23 @@ async function getAuthAlumno() {
             },
           },
         },
-      },
-      payments: {
+      });
+      enrollmentsList = enrollments.map((e) => ({
+        id: e.id,
+        subscriptionType: e.subscriptionType,
+        status: e.status,
+        enrolledAt: e.enrolledAt,
+        cohort: e.cohort,
+      }));
+    } catch (err) {
+      console.error("ajustes: enrollment fetch failed:", err instanceof Error ? err.message : err);
+    }
+
+    // Fetch payments (most likely to fail — table added recently)
+    let paymentsList: Array<Record<string, unknown>> = [];
+    try {
+      const payments = await prisma.payment.findMany({
+        where: { userId: user.id },
         select: {
           id: true,
           baseAmount: true,
@@ -46,22 +104,11 @@ async function getAuthAlumno() {
           cohort: { select: { id: true, name: true } },
         },
         orderBy: { createdAt: "desc" },
-      },
-    },
-  });
-
-  return dbUser;
-}
-
-// GET — Full profile, clinic, billing, enrollments, payments
-export async function GET() {
-  try {
-    const user = await getAuthAlumno();
-    if (!user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      });
+      paymentsList = payments;
+    } catch (err) {
+      console.error("ajustes: payment fetch failed:", err instanceof Error ? err.message : err);
     }
-
-    const clinic = user.clinics[0] || null;
 
     return NextResponse.json({
       profile: {
@@ -82,20 +129,7 @@ export async function GET() {
         specialty: user.specialty,
         motivation: user.motivation,
       },
-      clinic: clinic
-        ? {
-            id: clinic.id,
-            name: clinic.name,
-            address: clinic.address,
-            phone: clinic.phone,
-            email: clinic.email,
-            model: clinic.model,
-            cyclePhase: clinic.cyclePhase,
-            teamCount: clinic.teamCount,
-            services: clinic.services,
-            channels: clinic.channels,
-          }
-        : null,
+      clinic: clinicData,
       billing: {
         fiscalName: user.fiscalName,
         nifCif: user.nifCif,
@@ -116,14 +150,8 @@ export async function GET() {
         shippingPostalCode: user.shippingPostalCode,
         shippingCountry: user.shippingCountry,
       },
-      enrollments: user.enrollments.map((e) => ({
-        id: e.id,
-        subscriptionType: e.subscriptionType,
-        status: e.status,
-        enrolledAt: e.enrolledAt,
-        cohort: e.cohort,
-      })),
-      payments: user.payments,
+      enrollments: enrollmentsList,
+      payments: paymentsList,
     });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
@@ -137,7 +165,7 @@ export async function GET() {
 // PUT — Update profile, clinic, or billing
 export async function PUT(request: NextRequest) {
   try {
-    const user = await getAuthAlumno();
+    const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
@@ -150,6 +178,20 @@ export async function PUT(request: NextRequest) {
         { error: "Faltan campos (section, data)" },
         { status: 400 }
       );
+    }
+
+    // For clinic updates, fetch clinic separately
+    let userClinics: Array<{ id: string }> = [];
+    if (section === "clinic") {
+      try {
+        userClinics = await prisma.clinic.findMany({
+          where: { userId: user.id },
+          select: { id: true },
+          take: 1,
+        });
+      } catch {
+        // ignore
+      }
     }
 
     switch (section) {
@@ -174,7 +216,7 @@ export async function PUT(request: NextRequest) {
         break;
 
       case "clinic": {
-        const clinic = user.clinics[0];
+        const clinic = userClinics[0];
         if (clinic) {
           await prisma.clinic.update({
             where: { id: clinic.id },
@@ -243,7 +285,8 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("PUT /api/alumno/ajustes error:", error);
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("PUT /api/alumno/ajustes error:", errMsg);
+    return NextResponse.json({ error: `Error al guardar: ${errMsg}` }, { status: 500 });
   }
 }
