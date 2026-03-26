@@ -164,7 +164,7 @@ export default function AlumnoAjustesPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/alumno/ajustes");
+      const res = await fetch("/api/alumno/area-privada");
       if (!res.ok) throw new Error("Error al cargar datos");
       const data = await res.json();
       setProfile(data.profile);
@@ -230,7 +230,7 @@ export default function AlumnoAjustesPage() {
       setSaving(true);
       setError("");
       setSuccess("");
-      const res = await fetch("/api/alumno/ajustes", {
+      const res = await fetch("/api/alumno/area-privada", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ section, data }),
@@ -262,7 +262,7 @@ export default function AlumnoAjustesPage() {
     return (
       <div className="mx-auto max-w-5xl">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Mi Cuenta</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Área Privada</h1>
         </div>
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-8 text-center">
           <p className="text-sm text-red-700">{error || "No se pudieron cargar tus datos. Inténtalo de nuevo."}</p>
@@ -281,7 +281,7 @@ export default function AlumnoAjustesPage() {
     <div className="mx-auto max-w-5xl">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Mi Cuenta</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Área Privada</h1>
         <p className="mt-1 text-sm text-gray-500">
           Gestiona tu perfil, clínica, facturación y preferencias
         </p>
@@ -857,7 +857,7 @@ function SeguridadTab({ email }: { email: string }) {
     }
     try {
       setSaving(true);
-      const res = await fetch("/api/alumno/ajustes/password", {
+      const res = await fetch("/api/alumno/area-privada/password", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),

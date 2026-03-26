@@ -204,11 +204,11 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
   const settingsHref =
     role === "SUPERADMIN"
       ? viewMode === "alumno"
-        ? "/alumno/ajustes"
+        ? "/alumno/area-privada"
         : "/admin/ajustes"
       : role === "MENTOR"
         ? "/mentor/ajustes"
-        : "/alumno/ajustes";
+        : "/alumno/area-privada";
 
   const programColors: Record<string, { bg: string; text: string; border: string }> = {
     ACTIVA: { bg: "bg-blue-600", text: "text-blue-700", border: "border-blue-200" },
@@ -382,7 +382,7 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
           )}
         >
           <Settings size={20} />
-          {!collapsed && <span>Ajustes</span>}
+          {!collapsed && <span>{settingsHref.includes("admin") ? "Ajustes" : "Área Privada"}</span>}
         </Link>
 
         <div

@@ -49,7 +49,7 @@ export async function GET() {
         };
       }
     } catch (err) {
-      console.error("ajustes: clinic fetch failed:", err instanceof Error ? err.message : err);
+      console.error("area-privada: clinic fetch failed:", err instanceof Error ? err.message : err);
     }
 
     // Fetch enrollments
@@ -78,7 +78,7 @@ export async function GET() {
         cohort: e.cohort,
       }));
     } catch (err) {
-      console.error("ajustes: enrollment fetch failed:", err instanceof Error ? err.message : err);
+      console.error("area-privada: enrollment fetch failed:", err instanceof Error ? err.message : err);
     }
 
     // Fetch payments (most likely to fail — table added recently)
@@ -107,7 +107,7 @@ export async function GET() {
       });
       paymentsList = payments;
     } catch (err) {
-      console.error("ajustes: payment fetch failed:", err instanceof Error ? err.message : err);
+      console.error("area-privada: payment fetch failed:", err instanceof Error ? err.message : err);
     }
 
     return NextResponse.json({
@@ -156,8 +156,8 @@ export async function GET() {
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
     const errStack = error instanceof Error ? error.stack : "";
-    console.error("GET /api/alumno/ajustes error:", errMsg);
-    console.error("GET /api/alumno/ajustes stack:", errStack);
+    console.error("GET /api/alumno/area-privada error:", errMsg);
+    console.error("GET /api/alumno/area-privada stack:", errStack);
     return NextResponse.json({ error: `Error al cargar datos: ${errMsg}` }, { status: 500 });
   }
 }
@@ -286,7 +286,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
-    console.error("PUT /api/alumno/ajustes error:", errMsg);
+    console.error("PUT /api/alumno/area-privada error:", errMsg);
     return NextResponse.json({ error: `Error al guardar: ${errMsg}` }, { status: 500 });
   }
 }

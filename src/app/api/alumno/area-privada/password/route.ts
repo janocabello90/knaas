@@ -58,7 +58,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ ok: true, message: "Contraseña actualizada correctamente" });
   } catch (error) {
-    console.error("PUT /api/alumno/ajustes/password error:", error);
+    console.error("PUT /api/alumno/area-privada/password error:", error);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }
