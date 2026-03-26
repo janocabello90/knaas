@@ -127,15 +127,22 @@ export default async function ProgramaPage() {
                 const isCompleted = status === "COMPLETED";
                 const isLocked = status === "LOCKED";
 
+                const Wrapper = isLocked ? "div" : Link;
+                const wrapperProps = isLocked
+                  ? {}
+                  : { href: `/alumno/programa/paso/${step.number}` };
+
                 return (
-                  <div
+                  <Wrapper
                     key={step.number}
+                    {...(wrapperProps as Record<string, string>)}
                     className={cn(
-                      "rounded-xl border bg-white p-4 transition-all",
+                      "block rounded-xl border bg-white p-4 transition-all",
                       isActive && `${colors.border} ring-2 ring-blue-200`,
                       isCompleted && "border-green-200",
                       isLocked && "border-gray-200 opacity-60",
-                      !isActive && !isCompleted && !isLocked && "border-gray-200"
+                      !isActive && !isCompleted && !isLocked && "border-gray-200",
+                      !isLocked && "cursor-pointer hover:shadow-md"
                     )}
                   >
                     <div className="flex items-center gap-4">
@@ -197,21 +204,19 @@ export default async function ProgramaPage() {
                     {/* Active step: show CTA */}
                     {isActive && (
                       <div className="mt-4 flex gap-2">
-                        <Link
-                          href={`/alumno/programa/paso/${step.number}`}
+                        <span
                           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                         >
                           Continuar paso
-                        </Link>
-                        <Link
-                          href={`/alumno/academia?paso=${step.number}`}
+                        </span>
+                        <span
                           className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
                         >
                           Abrir Academia IA
-                        </Link>
+                        </span>
                       </div>
                     )}
-                  </div>
+                  </Wrapper>
                 );
               })}
             </div>
