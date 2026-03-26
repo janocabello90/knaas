@@ -127,24 +127,17 @@ export default async function ProgramaPage() {
                 const isCompleted = status === "COMPLETED";
                 const isLocked = status === "LOCKED";
 
-                const Wrapper = isLocked ? "div" : Link;
-                const wrapperProps = isLocked
-                  ? {}
-                  : { href: `/alumno/programa/paso/${step.number}` };
+                const cardClasses = cn(
+                  "block rounded-xl border bg-white p-4 transition-all",
+                  isActive && `${colors.border} ring-2 ring-blue-200`,
+                  isCompleted && "border-green-200",
+                  isLocked && "border-gray-200 opacity-60",
+                  !isActive && !isCompleted && !isLocked && "border-gray-200",
+                  !isLocked && "cursor-pointer hover:shadow-md"
+                );
 
-                return (
-                  <Wrapper
-                    key={step.number}
-                    {...(wrapperProps as Record<string, string>)}
-                    className={cn(
-                      "block rounded-xl border bg-white p-4 transition-all",
-                      isActive && `${colors.border} ring-2 ring-blue-200`,
-                      isCompleted && "border-green-200",
-                      isLocked && "border-gray-200 opacity-60",
-                      !isActive && !isCompleted && !isLocked && "border-gray-200",
-                      !isLocked && "cursor-pointer hover:shadow-md"
-                    )}
-                  >
+                const cardContent = (
+                  <>
                     <div className="flex items-center gap-4">
                       {/* Step number */}
                       <div
@@ -216,7 +209,17 @@ export default async function ProgramaPage() {
                         </span>
                       </div>
                     )}
-                  </Wrapper>
+                  </>
+                );
+
+                return isLocked ? (
+                  <div key={step.number} className={cardClasses}>
+                    {cardContent}
+                  </div>
+                ) : (
+                  <Link key={step.number} href={`/alumno/programa/paso/${step.number}`} className={cardClasses}>
+                    {cardContent}
+                  </Link>
                 );
               })}
             </div>
