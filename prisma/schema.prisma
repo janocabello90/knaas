@@ -166,6 +166,8 @@ model User {
   createdTasks         AdminTask[]         @relation("TaskCreator")
   payments             Payment[]
   createdInvitations   InvitationLink[]    @relation("InvitationCreator")
+  diagnosticData       DiagnosticData[]
+  seguimiento          SeguimientoMensual[]
 
   @@map("users")
 }
@@ -560,4 +562,44 @@ model InvitationLink {
   createdBy User   @relation("InvitationCreator", fields: [createdById], references: [id])
 
   @@map("invitation_links")
+}
+
+// ============================================================
+// DIAGNOSTIC DATA (Paso 1 — Diagnóstico 360°)
+// ============================================================
+
+model DiagnosticData {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  year      Int
+  data      Json     @default("{}")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, year])
+  @@map("diagnostic_data")
+}
+
+// ============================================================
+// SEGUIMIENTO MENSUAL (Dashboard KPIs)
+// ============================================================
+
+model SeguimientoMensual {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  year      Int
+  mes       Int      // 1-12
+  facReal   Float    @default(0) @map("fac_real")
+  sesReal   Int      @default(0) @map("ses_real")
+  pacNuevos Int      @default(0) @map("pac_nuevos")
+  churn     Int      @default(0)
+  nps       Int?
+  srvsData  Json     @default("[]") @map("srvs_data")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, year, mes])
+  @@map("seguimiento_mensual")
 }
