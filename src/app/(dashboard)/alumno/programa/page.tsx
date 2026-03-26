@@ -30,7 +30,7 @@ const statusIcons: Record<string, React.ReactNode> = {
 
 export default async function ProgramaPage() {
   const user = await requireRole(["ALUMNO"]);
-  const isAdmin = user.role === "SUPERADMIN" || user.role === "ADMIN";
+  const isAdmin = (user.role as string) === "SUPERADMIN" || (user.role as string) === "ADMIN";
 
   const enrollment = await prisma.enrollment.findFirst({
     where: { userId: user.id },
