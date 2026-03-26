@@ -168,8 +168,30 @@ model User {
   createdInvitations   InvitationLink[]    @relation("InvitationCreator")
   diagnosticData       DiagnosticData[]
   seguimiento          SeguimientoMensual[]
+  consents             UserConsent[]
 
   @@map("users")
+}
+
+// ============================================================
+// CONSENT TRACKING (RGPD / LOPDGDD)
+// ============================================================
+
+model UserConsent {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  purpose   String   // "terms", "privacy", "ai_processing", "marketing", "cookies_analytics"
+  granted   Boolean  @default(false)
+  version   String   // e.g. "1.0" — tracks which policy version was accepted
+  ip        String?  // IP at time of consent (optional for audit)
+  userAgent String?  @map("user_agent")
+  grantedAt DateTime @default(now()) @map("granted_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, purpose])
+  @@map("user_consents")
 }
 
 // ============================================================

@@ -103,6 +103,18 @@ export async function POST(request: Request) {
       );
     }
 
+    // ── RGPD: Check AI processing consent ──
+    const aiConsent = await prisma.userConsent.findUnique({
+      where: { userId_purpose: { userId: dbUser.id, purpose: "ai_processing" } },
+    }).catch(() => null);
+
+    if (!aiConsent?.granted) {
+      return NextResponse.json(
+        { error: "Para usar el asistente IA necesitas activar el consentimiento de procesamiento por IA en tu Área Privada." },
+        { status: 403 }
+      );
+    }
+
     // Get API key: first check user's own key, then fall back to any SUPERADMIN's key
     let apiKey = dbUser.apiKeyEncrypted;
     if (!apiKey) {
@@ -141,8 +153,8 @@ export async function POST(request: Request) {
       const latest = kpiSnapshots[kpiSnapshots.length - 1];
       const baseline = kpiSnapshots.find((s) => s.isBaseline) ?? kpiSnapshots[0];
 
+      // Data minimization (RGPD Art. 5.1.c): only send what's needed for educational context
       clinicData = {
-        nombre: clinic.name,
         modelo: clinic.model,
         fase: clinic.cyclePhase,
         equipo: clinic.teamCount,
