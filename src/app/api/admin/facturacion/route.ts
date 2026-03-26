@@ -46,115 +46,137 @@ export async function GET(request: NextRequest) {
     const cohortId = searchParams.get("cohortId");
     const search = searchParams.get("search");
 
-    const where: Record<string, unknown> = {};
-    if (status) where.status = status;
-    if (method) where.method = method;
-    if (cohortId) where.cohortId = cohortId;
-    if (search) {
-      where.user = {
-        OR: [
-          { firstName: { contains: search, mode: "insensitive" } },
-          { lastName: { contains: search, mode: "insensitive" } },
-          { email: { contains: search, mode: "insensitive" } },
-          { nifCif: { contains: search, mode: "insensitive" } },
-        ],
-      };
-    }
-
-    const payments = await prisma.payment.findMany({
-      where,
-      select: {
-        id: true,
-        baseAmount: true,
-        ivaRate: true,
-        ivaAmount: true,
-        totalAmount: true,
-        currency: true,
-        type: true,
-        method: true,
-        status: true,
-        installmentNumber: true,
-        totalInstallments: true,
-        stripePaymentIntentId: true,
-        stripeSessionId: true,
-        invoiceNumber: true,
-        notes: true,
-        paidAt: true,
-        refundedAt: true,
-        createdAt: true,
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            photo: true,
-            nifCif: true,
-            fiscalName: true,
-            businessType: true,
-          },
-        },
-        cohort: {
-          select: { id: true, name: true },
-        },
-        enrollment: {
-          select: { id: true, subscriptionType: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    // Cohorts for filter
-    const cohorts = await prisma.cohort.findMany({
-      select: { id: true, name: true },
-      orderBy: { startDate: "desc" },
-    });
-
-    // Stats
-    const allPayments = await prisma.payment.findMany({
-      select: { baseAmount: true, ivaAmount: true, totalAmount: true, status: true, method: true },
-    });
-
-    const stats = {
-      totalRevenue: allPayments
-        .filter((p) => p.status === "COMPLETED")
-        .reduce((sum, p) => sum + p.totalAmount, 0),
-      totalBase: allPayments
-        .filter((p) => p.status === "COMPLETED")
-        .reduce((sum, p) => sum + p.baseAmount, 0),
-      totalIva: allPayments
-        .filter((p) => p.status === "COMPLETED")
-        .reduce((sum, p) => sum + p.ivaAmount, 0),
-      pendingAmount: allPayments
-        .filter((p) => p.status === "PENDING")
-        .reduce((sum, p) => sum + p.totalAmount, 0),
-      totalPayments: allPayments.length,
-      completedPayments: allPayments.filter((p) => p.status === "COMPLETED").length,
-      pendingTransfers: allPayments.filter(
-        (p) => p.status === "PENDING" && p.method === "TRANSFERENCIA"
-      ).length,
-      refundedAmount: allPayments
-        .filter((p) => p.status === "REFUNDED")
-        .reduce((sum, p) => sum + p.totalAmount, 0),
+    // ── Payments (defensive — table/columns may not exist yet) ──
+    let payments: unknown[] = [];
+    let stats = {
+      totalRevenue: 0, totalBase: 0, totalIva: 0,
+      pendingAmount: 0, totalPayments: 0, completedPayments: 0,
+      pendingTransfers: 0, refundedAmount: 0,
     };
 
-    // Students for the create modal
-    const students = await prisma.user.findMany({
-      where: { role: "ALUMNO" },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        enrollments: {
-          select: {
-            id: true,
-            cohort: { select: { id: true, name: true } },
+    try {
+      const where: Record<string, unknown> = {};
+      if (status) where.status = status;
+      if (method) where.method = method;
+      if (cohortId) where.cohortId = cohortId;
+      if (search) {
+        where.user = {
+          OR: [
+            { firstName: { contains: search, mode: "insensitive" } },
+            { lastName: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+            { nifCif: { contains: search, mode: "insensitive" } },
+          ],
+        };
+      }
+
+      payments = await prisma.payment.findMany({
+        where,
+        select: {
+          id: true,
+          baseAmount: true,
+          ivaRate: true,
+          ivaAmount: true,
+          totalAmount: true,
+          currency: true,
+          type: true,
+          method: true,
+          status: true,
+          installmentNumber: true,
+          totalInstallments: true,
+          stripePaymentIntentId: true,
+          stripeSessionId: true,
+          invoiceNumber: true,
+          notes: true,
+          paidAt: true,
+          refundedAt: true,
+          createdAt: true,
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              photo: true,
+              nifCif: true,
+              fiscalName: true,
+              businessType: true,
+            },
+          },
+          cohort: {
+            select: { id: true, name: true },
+          },
+          enrollment: {
+            select: { id: true, subscriptionType: true },
           },
         },
-      },
-      orderBy: { firstName: "asc" },
-    });
+        orderBy: { createdAt: "desc" },
+      });
+
+      // Stats from all payments
+      const allPayments = await prisma.payment.findMany({
+        select: { baseAmount: true, ivaAmount: true, totalAmount: true, status: true, method: true },
+      });
+
+      stats = {
+        totalRevenue: allPayments
+          .filter((p) => p.status === "COMPLETED")
+          .reduce((sum, p) => sum + p.totalAmount, 0),
+        totalBase: allPayments
+          .filter((p) => p.status === "COMPLETED")
+          .reduce((sum, p) => sum + p.baseAmount, 0),
+        totalIva: allPayments
+          .filter((p) => p.status === "COMPLETED")
+          .reduce((sum, p) => sum + p.ivaAmount, 0),
+        pendingAmount: allPayments
+          .filter((p) => p.status === "PENDING")
+          .reduce((sum, p) => sum + p.totalAmount, 0),
+        totalPayments: allPayments.length,
+        completedPayments: allPayments.filter((p) => p.status === "COMPLETED").length,
+        pendingTransfers: allPayments.filter(
+          (p) => p.status === "PENDING" && p.method === "TRANSFERENCIA"
+        ).length,
+        refundedAmount: allPayments
+          .filter((p) => p.status === "REFUNDED")
+          .reduce((sum, p) => sum + p.totalAmount, 0),
+      };
+    } catch (err) {
+      console.error("[Facturación] Error fetching payments:", err instanceof Error ? err.message : err);
+    }
+
+    // ── Cohorts (independent query) ──
+    let cohorts: unknown[] = [];
+    try {
+      cohorts = await prisma.cohort.findMany({
+        select: { id: true, name: true },
+        orderBy: { startDate: "desc" },
+      });
+    } catch (err) {
+      console.error("[Facturación] Error fetching cohorts:", err instanceof Error ? err.message : err);
+    }
+
+    // ── Students for create modal (independent query) ──
+    let students: unknown[] = [];
+    try {
+      students = await prisma.user.findMany({
+        where: { role: "ALUMNO" },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          enrollments: {
+            select: {
+              id: true,
+              cohort: { select: { id: true, name: true } },
+            },
+          },
+        },
+        orderBy: { firstName: "asc" },
+      });
+    } catch (err) {
+      console.error("[Facturación] Error fetching students:", err instanceof Error ? err.message : err);
+    }
 
     return NextResponse.json({ payments, cohorts, stats, students });
   } catch (error) {
