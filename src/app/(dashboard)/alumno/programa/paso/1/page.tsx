@@ -1218,17 +1218,17 @@ function SeccionD({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
       {/* P&L Summary */}
       <Card title="Resumen de la cuenta de resultados">
         <div className="grid gap-4 sm:grid-cols-4">
-          <div className="rounded-lg bg-green-50 p-4 text-center">
-            <p className="text-xs font-medium text-green-600">Ingresos</p>
-            <p className="mt-1 text-lg font-bold text-green-700">{fmt(totalIngresos)}</p>
+          <div className="rounded-lg bg-blue-50 p-4 text-center">
+            <p className="text-xs font-medium text-blue-600">Ingresos</p>
+            <p className="mt-1 text-lg font-bold text-blue-700">{fmt(totalIngresos)}</p>
           </div>
-          <div className="rounded-lg bg-red-50 p-4 text-center">
-            <p className="text-xs font-medium text-red-600">Gastos</p>
-            <p className="mt-1 text-lg font-bold text-red-700">{fmt(totalGastos)}</p>
+          <div className="rounded-lg bg-gray-100 p-4 text-center">
+            <p className="text-xs font-medium text-gray-600">Gastos</p>
+            <p className="mt-1 text-lg font-bold text-gray-700">{fmt(totalGastos)}</p>
           </div>
-          <div className={`rounded-lg p-4 text-center ${beneficio >= 0 ? "bg-blue-50" : "bg-red-50"}`}>
-            <p className={`text-xs font-medium ${beneficio >= 0 ? "text-blue-600" : "text-red-600"}`}>Beneficio</p>
-            <p className={`mt-1 text-lg font-bold ${beneficio >= 0 ? "text-blue-700" : "text-red-700"}`}>{fmt(beneficio)}</p>
+          <div className={`rounded-lg p-4 text-center ${beneficio >= 0 ? "bg-green-50" : "bg-red-50"}`}>
+            <p className={`text-xs font-medium ${beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>Beneficio</p>
+            <p className={`mt-1 text-lg font-bold ${beneficio >= 0 ? "text-green-700" : "text-red-700"}`}>{fmt(beneficio)}</p>
           </div>
           <div className="rounded-lg bg-gray-50 p-4 text-center">
             <p className="text-xs font-medium text-gray-600">Margen</p>
@@ -1245,7 +1245,7 @@ function SeccionD({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
 const COST_GROUPS = [
   { key: "APROV", label: "Aprovisionamiento", color: "bg-amber-500" },
   { key: "INFRA", label: "Infraestructura", color: "bg-blue-500" },
-  { key: "PERS_CLIN", label: "Personal clínico", color: "bg-green-500" },
+  { key: "PERS_CLIN", label: "Personal clínico", color: "bg-teal-500" },
   { key: "PERS_GEST", label: "Personal gestión", color: "bg-purple-500" },
   { key: "MKT", label: "Marketing", color: "bg-pink-500" },
   { key: "OTROS", label: "Otros", color: "bg-gray-500" },
@@ -1332,9 +1332,9 @@ function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
         return (
           <Card key={group.key} title={group.label} subtitle={`Total: ${fmt(groupTotal)} — Reparte entre servicios`}>
             {/* Balance indicator */}
-            <div className={`mb-4 flex items-center gap-2 rounded-lg px-3 py-2 ${Math.abs(groupSum - 100) < 0.5 ? "bg-green-50" : "bg-red-50"}`}>
-              <div className={`h-2.5 w-2.5 rounded-full ${Math.abs(groupSum - 100) < 0.5 ? "bg-green-500" : "bg-red-500"}`} />
-              <span className={`text-sm font-medium ${Math.abs(groupSum - 100) < 0.5 ? "text-green-700" : "text-red-700"}`}>
+            <div className={`mb-4 flex items-center gap-2 rounded-lg px-3 py-2 ${Math.abs(groupSum - 100) < 0.5 ? "bg-blue-50" : "bg-amber-50"}`}>
+              <div className={`h-2.5 w-2.5 rounded-full ${Math.abs(groupSum - 100) < 0.5 ? "bg-blue-500" : "bg-amber-500"}`} />
+              <span className={`text-sm font-medium ${Math.abs(groupSum - 100) < 0.5 ? "text-blue-700" : "text-amber-700"}`}>
                 {Math.abs(groupSum - 100) < 0.5
                   ? `${groupSum.toFixed(1)}% — Correcto`
                   : `${groupSum.toFixed(1)}% — La suma debe ser exactamente 100%`}
@@ -1418,7 +1418,7 @@ function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
                   <tr key={srv.sid}>
                     <td className="py-3 font-medium text-gray-900">{srv.name || `Servicio ${srv.sid}`}</td>
                     <td className="py-3 text-right text-gray-600">{fmt(totalFac)}</td>
-                    <td className="py-3 text-right text-red-600">{fmt(costs)}</td>
+                    <td className="py-3 text-right text-gray-600">{fmt(costs)}</td>
                     <td className={`py-3 text-right font-semibold ${beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>
                       {fmt(beneficio)}
                     </td>
@@ -1437,7 +1437,7 @@ function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
               <tr className="border-t-2 border-gray-200 font-semibold">
                 <td className="py-3 text-gray-700">TOTAL</td>
                 <td className="py-3 text-right text-gray-700">{fmt(sum(data.srvs.map((s) => sum(s.facM))))}</td>
-                <td className="py-3 text-right text-red-700">{fmt(totalGastos)}</td>
+                <td className="py-3 text-right text-gray-700">{fmt(totalGastos)}</td>
                 <td className={`py-3 text-right ${sum(data.srvs.map((s) => sum(s.facM))) - totalGastos >= 0 ? "text-green-700" : "text-red-700"}`}>
                   {fmt(sum(data.srvs.map((s) => sum(s.facM))) - totalGastos)}
                 </td>
@@ -1462,10 +1462,10 @@ function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
             const margenPct = totalFac > 0 ? (beneficio / totalFac) * 100 : 0;
 
             return (
-              <div key={srv.sid} className={`rounded-xl border-2 p-4 ${margenPct >= 20 ? "border-green-200 bg-green-50" : margenPct >= 0 ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50"}`}>
+              <div key={srv.sid} className={`rounded-xl border-2 p-4 ${beneficio >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
                 <p className="text-sm font-semibold text-gray-800">{srv.name || `Servicio ${srv.sid}`}</p>
                 <div className="mt-2 flex items-baseline gap-2">
-                  <span className={`text-2xl font-bold ${margenPct >= 20 ? "text-green-700" : margenPct >= 0 ? "text-amber-700" : "text-red-700"}`}>
+                  <span className={`text-2xl font-bold ${beneficio >= 0 ? "text-green-700" : "text-red-700"}`}>
                     {margenPct.toFixed(1)}%
                   </span>
                   <span className="text-xs text-gray-500">margen</span>
@@ -1485,13 +1485,13 @@ function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
                       />
                     );
                   })}
-                  {margenPct > 0 && (
-                    <div className="bg-green-400" style={{ width: `${margenPct}%` }} title={`Margen: ${fmt(beneficio)}`} />
+                  {beneficio > 0 && (
+                    <div className="bg-green-400" style={{ width: `${margenPct}%` }} title={`Beneficio: ${fmt(beneficio)}`} />
                   )}
                 </div>
                 <div className="mt-1 flex justify-between text-[10px] text-gray-400">
                   <span>Costes: {fmt(costs)}</span>
-                  <span>Beneficio: {fmt(beneficio)}</span>
+                  <span className={beneficio >= 0 ? "text-green-600" : "text-red-600"}>Beneficio: {fmt(beneficio)}</span>
                 </div>
               </div>
             );
