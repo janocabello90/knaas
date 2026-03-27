@@ -90,6 +90,34 @@ export default function LoginPage() {
               {loading ? "Entrando..." : "Entrar"}
             </button>
           </form>
+
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={async () => {
+                if (!email) {
+                  setError("Introduce tu email primero");
+                  return;
+                }
+                setLoading(true);
+                setError("");
+                const supabase = createSupabaseBrowserClient();
+                const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+                  redirectTo: `${window.location.origin}/api/auth/callback?type=recovery`,
+                });
+                if (resetError) {
+                  setError(resetError.message);
+                } else {
+                  setError("");
+                  alert("Te hemos enviado un email para restablecer tu contraseña. Revisa tu bandeja de entrada.");
+                }
+                setLoading(false);
+              }}
+              className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-gray-400">
