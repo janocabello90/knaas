@@ -47,6 +47,8 @@ type Ej1Data = {
   gastos: Gasto[];
   dIngSrv: number;
   dIngOtros: number;
+  // Cost allocation: { [partidaGroup]: { [sid]: percentage } }
+  costAlloc: Record<string, Record<number, number>>;
 };
 
 type Servicio = {
@@ -151,6 +153,7 @@ const DEFAULT_EJ1: Ej1Data = {
     // Marketing
     { id: 21, concepto: "Marketing y publicidad", partida: "MKT", valor: 0 },
   ],
+  costAlloc: {},
   dIngSrv: 0, dIngOtros: 0,
 };
 
@@ -567,18 +570,20 @@ function AutoField({ label, value, sublabel }: { label: string; value: string; s
 // ══════════════════════════════════════════════════════════════
 
 function Ejercicio1({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) => Ej1Data) => void }) {
-  const [section, setSection] = useState<"A" | "B" | "C" | "D">("A");
+  const [section, setSection] = useState<"A" | "B" | "C" | "D" | "E">("A");
 
   // Section completion checks for sub-locking
   const sectionADone = sum(data.aFac) > 0 && sum(data.aSes) > 0;
   const sectionBDone = data.srvs.length > 0 && data.srvs.every((s) => s.name.trim() !== "" && sum(s.facM) > 0);
   const sectionCDone = data.wrks.length > 0 && data.wrks.every((w) => w.name.trim() !== "");
+  const sectionDDone = data.gastos.some((g) => g.valor > 0);
 
   const isSectionUnlocked = (key: string): boolean => {
     if (key === "A") return true;
     if (key === "B") return sectionADone;
     if (key === "C") return sectionADone && sectionBDone;
     if (key === "D") return sectionADone && sectionBDone && sectionCDone;
+    if (key === "E") return sectionADone && sectionBDone && sectionCDone && sectionDDone;
     return false;
   };
 
@@ -587,6 +592,7 @@ function Ejercicio1({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data)
     { key: "B" as const, label: "Servicios", icon: <Zap size={14} /> },
     { key: "C" as const, label: "Profesionales", icon: <Users size={14} /> },
     { key: "D" as const, label: "Cuenta de resultados", icon: <Receipt size={14} /> },
+    { key: "E" as const, label: "Margen por servicio", icon: <TrendingUp size={14} /> },
   ];
 
   return (
@@ -598,7 +604,8 @@ function Ejercicio1({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data)
           "Empieza por los KPIs globales: facturación, sesiones y pacientes nuevos mes a mes.",
           "Después define los servicios que ofreces con su facturación y sesiones mensuales. El ticket medio se calcula automáticamente.",
           "Añade a tu equipo de profesionales y sus servicios asignados.",
-          "Finalmente revisa la cuenta de resultados con todos los gastos operativos.",
+          "Revisa la cuenta de resultados con todos los gastos operativos.",
+          "Reparte los costes entre servicios para conocer el margen unitario de cada uno.",
         ]}
       />
 
@@ -629,6 +636,7 @@ function Ejercicio1({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data)
       {section === "B" && <SeccionB data={data} update={update} />}
       {section === "C" && <SeccionC data={data} update={update} />}
       {section === "D" && <SeccionD data={data} update={update} />}
+      {section === "E" && <SeccionE data={data} update={update} />}
     </div>
   );
 }
@@ -1226,6 +1234,308 @@ function SeccionD({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
             <p className="text-xs font-medium text-gray-600">Margen</p>
             <p className="mt-1 text-lg font-bold text-gray-900">{margen.toFixed(1)}%</p>
           </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ── Section E: Repercusión de costes / Margen por servicio ──
+
+const COST_GROUPS = [
+  { key: "APROV", label: "Aprovisionamiento", color: "bg-amber-500" },
+  { key: "INFRA", label: "Infraestructura", color: "bg-blue-500" },
+  { key: "PERS_CLIN", label: "Personal clínico", color: "bg-green-500" },
+  { key: "PERS_GEST", label: "Personal gestión", color: "bg-purple-500" },
+  { key: "MKT", label: "Marketing", color: "bg-pink-500" },
+  { key: "OTROS", label: "Otros", color: "bg-gray-500" },
+];
+
+function getGroupTotal(gastos: Gasto[], groupKey: string): number {
+  return sum(gastos.filter((g) => g.partida.startsWith(groupKey)).map((g) => g.valor));
+}
+
+function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) => Ej1Data) => void }) {
+  const alloc = data.costAlloc || {};
+
+  // Initialize even distribution if a group has no allocation yet
+  const getAlloc = (groupKey: string, sid: number): number => {
+    if (alloc[groupKey]?.[sid] != null) return alloc[groupKey][sid];
+    // Default: distribute evenly across services
+    return data.srvs.length > 0 ? Math.round((100 / data.srvs.length) * 10) / 10 : 0;
+  };
+
+  const setAlloc = (groupKey: string, sid: number, value: number) => {
+    update((prev) => {
+      const prevAlloc = prev.costAlloc || {};
+      const groupAlloc = { ...(prevAlloc[groupKey] || {}) };
+
+      // If allocation doesn't exist yet, initialize with even distribution
+      if (Object.keys(groupAlloc).length === 0) {
+        prev.srvs.forEach((s) => {
+          groupAlloc[s.sid] = Math.round((100 / prev.srvs.length) * 10) / 10;
+        });
+      }
+
+      groupAlloc[sid] = Math.max(0, Math.min(100, value));
+
+      return {
+        ...prev,
+        costAlloc: { ...prevAlloc, [groupKey]: groupAlloc },
+      };
+    });
+  };
+
+  // Auto-balance: when one slider changes, distribute remaining among others
+  const setAllocBalanced = (groupKey: string, sid: number, newValue: number) => {
+    update((prev) => {
+      const prevAlloc = prev.costAlloc || {};
+      const groupAlloc = { ...(prevAlloc[groupKey] || {}) };
+
+      // Initialize if needed
+      if (Object.keys(groupAlloc).length === 0) {
+        prev.srvs.forEach((s) => {
+          groupAlloc[s.sid] = Math.round((100 / prev.srvs.length) * 10) / 10;
+        });
+      }
+
+      const clamped = Math.max(0, Math.min(100, newValue));
+      const oldValue = groupAlloc[sid] ?? (100 / prev.srvs.length);
+      const otherSids = prev.srvs.filter((s) => s.sid !== sid).map((s) => s.sid);
+
+      if (otherSids.length === 0) {
+        groupAlloc[sid] = 100;
+      } else {
+        groupAlloc[sid] = clamped;
+        const remaining = 100 - clamped;
+        const otherTotal = sum(otherSids.map((s) => groupAlloc[s] ?? (100 / prev.srvs.length)));
+
+        if (otherTotal > 0) {
+          otherSids.forEach((s) => {
+            const current = groupAlloc[s] ?? (100 / prev.srvs.length);
+            groupAlloc[s] = Math.round((current / otherTotal) * remaining * 10) / 10;
+          });
+        } else {
+          const each = Math.round((remaining / otherSids.length) * 10) / 10;
+          otherSids.forEach((s) => { groupAlloc[s] = each; });
+        }
+      }
+
+      return {
+        ...prev,
+        costAlloc: { ...prevAlloc, [groupKey]: groupAlloc },
+      };
+    });
+  };
+
+  // Compute totals
+  const totalGastosByGroup: Record<string, number> = {};
+  COST_GROUPS.forEach((g) => {
+    totalGastosByGroup[g.key] = getGroupTotal(data.gastos, g.key);
+  });
+  const totalGastos = sum(Object.values(totalGastosByGroup));
+
+  // Compute cost per service
+  const serviceCosts: Record<number, { total: number; byGroup: Record<string, number> }> = {};
+  data.srvs.forEach((srv) => {
+    const byGroup: Record<string, number> = {};
+    let total = 0;
+    COST_GROUPS.forEach((g) => {
+      const pct = getAlloc(g.key, srv.sid) / 100;
+      const cost = totalGastosByGroup[g.key] * pct;
+      byGroup[g.key] = cost;
+      total += cost;
+    });
+    serviceCosts[srv.sid] = { total, byGroup };
+  });
+
+  return (
+    <div className="space-y-6">
+      <InstructionDropdown
+        color="green"
+        title="Instrucciones: Repercusión de costes"
+        intro="Distribuye el porcentaje de cada partida de gasto entre tus servicios. Esto te permitirá conocer el margen real unitario de cada servicio. Usa los sliders o introduce el porcentaje manualmente. El total de cada partida debe sumar 100%."
+        steps={[
+          "Para cada grupo de costes (Aprovisionamiento, Infraestructura, etc.) distribuye el % entre servicios.",
+          "Mueve los sliders o escribe el porcentaje directamente.",
+          "El sistema ajusta automáticamente los demás servicios para que siempre sume 100%.",
+          "Abajo verás el margen unitario resultante de cada servicio.",
+        ]}
+      />
+
+      {/* Cost allocation per group */}
+      {COST_GROUPS.map((group) => {
+        const groupTotal = totalGastosByGroup[group.key];
+        if (groupTotal === 0) return null; // Skip groups with no costs
+
+        const groupSum = sum(data.srvs.map((s) => getAlloc(group.key, s.sid)));
+
+        return (
+          <Card key={group.key} title={group.label} subtitle={`Total: ${fmt(groupTotal)} — Reparte entre servicios`}>
+            {/* Balance indicator */}
+            <div className="mb-4 flex items-center gap-2">
+              <div className={`h-2 w-2 rounded-full ${Math.abs(groupSum - 100) < 0.5 ? "bg-green-500" : "bg-amber-500"}`} />
+              <span className={`text-xs font-medium ${Math.abs(groupSum - 100) < 0.5 ? "text-green-600" : "text-amber-600"}`}>
+                {groupSum.toFixed(1)}% asignado {Math.abs(groupSum - 100) < 0.5 ? "— OK" : `(debe ser 100%)`}
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              {data.srvs.map((srv) => {
+                const pctValue = getAlloc(group.key, srv.sid);
+                const costForSrv = groupTotal * (pctValue / 100);
+                return (
+                  <div key={srv.sid} className="flex items-center gap-3">
+                    <div className="w-32 truncate text-sm font-medium text-gray-700" title={srv.name || `Servicio ${srv.sid}`}>
+                      {srv.name || `Servicio ${srv.sid}`}
+                    </div>
+                    {/* Slider */}
+                    <div className="relative flex-1">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={0.5}
+                        value={pctValue}
+                        onChange={(e) => setAllocBalanced(group.key, srv.sid, parseFloat(e.target.value))}
+                        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-gray-200 accent-blue-600"
+                      />
+                      <div
+                        className={`absolute top-0 left-0 h-2 rounded-full pointer-events-none ${group.color} opacity-30`}
+                        style={{ width: `${pctValue}%` }}
+                      />
+                    </div>
+                    {/* Manual input */}
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.5}
+                        value={pctValue || ""}
+                        onChange={(e) => setAllocBalanced(group.key, srv.sid, parseFloat(e.target.value) || 0)}
+                        className="w-16 rounded-md border border-gray-300 px-2 py-1 text-right text-sm tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <span className="text-xs text-gray-400">%</span>
+                    </div>
+                    {/* Cost result */}
+                    <div className="w-20 text-right text-xs font-medium text-gray-500">
+                      {fmt(costForSrv)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        );
+      })}
+
+      {/* Margin result per service */}
+      <Card title="Margen unitario por servicio" subtitle="Facturación menos costes repercutidos, dividido entre sesiones">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="pb-3 text-left text-xs font-medium text-gray-500">Servicio</th>
+                <th className="pb-3 text-right text-xs font-medium text-gray-500">Facturación</th>
+                <th className="pb-3 text-right text-xs font-medium text-gray-500">Costes</th>
+                <th className="pb-3 text-right text-xs font-medium text-gray-500">Beneficio</th>
+                <th className="pb-3 text-right text-xs font-medium text-gray-500">Sesiones</th>
+                <th className="pb-3 text-right text-xs font-medium text-gray-500">Margen/sesión</th>
+                <th className="pb-3 text-right text-xs font-medium text-gray-500">Margen %</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {data.srvs.map((srv) => {
+                const totalFac = sum(srv.facM);
+                const totalSes = sum(srv.sesM);
+                const costs = serviceCosts[srv.sid]?.total ?? 0;
+                const beneficio = totalFac - costs;
+                const margenUnitario = totalSes > 0 ? beneficio / totalSes : 0;
+                const margenPct = totalFac > 0 ? (beneficio / totalFac) * 100 : 0;
+
+                return (
+                  <tr key={srv.sid}>
+                    <td className="py-3 font-medium text-gray-900">{srv.name || `Servicio ${srv.sid}`}</td>
+                    <td className="py-3 text-right text-gray-600">{fmt(totalFac)}</td>
+                    <td className="py-3 text-right text-red-600">{fmt(costs)}</td>
+                    <td className={`py-3 text-right font-semibold ${beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {fmt(beneficio)}
+                    </td>
+                    <td className="py-3 text-right text-gray-600">{totalSes.toLocaleString("es-ES")}</td>
+                    <td className={`py-3 text-right font-bold ${margenUnitario >= 0 ? "text-green-700" : "text-red-700"}`}>
+                      {totalSes > 0 ? fmt(margenUnitario) : "—"}
+                    </td>
+                    <td className={`py-3 text-right font-medium ${margenPct >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {totalFac > 0 ? `${margenPct.toFixed(1)}%` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-gray-200 font-semibold">
+                <td className="py-3 text-gray-700">TOTAL</td>
+                <td className="py-3 text-right text-gray-700">{fmt(sum(data.srvs.map((s) => sum(s.facM))))}</td>
+                <td className="py-3 text-right text-red-700">{fmt(totalGastos)}</td>
+                <td className={`py-3 text-right ${sum(data.srvs.map((s) => sum(s.facM))) - totalGastos >= 0 ? "text-green-700" : "text-red-700"}`}>
+                  {fmt(sum(data.srvs.map((s) => sum(s.facM))) - totalGastos)}
+                </td>
+                <td className="py-3 text-right text-gray-700">{sum(data.srvs.map((s) => sum(s.sesM))).toLocaleString("es-ES")}</td>
+                <td className="py-3 text-right text-gray-400">—</td>
+                <td className="py-3 text-right text-gray-400">
+                  {sum(data.srvs.map((s) => sum(s.facM))) > 0
+                    ? `${(((sum(data.srvs.map((s) => sum(s.facM))) - totalGastos) / sum(data.srvs.map((s) => sum(s.facM)))) * 100).toFixed(1)}%`
+                    : "—"}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {/* Visual breakdown per service */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          {data.srvs.map((srv) => {
+            const totalFac = sum(srv.facM);
+            const costs = serviceCosts[srv.sid]?.total ?? 0;
+            const beneficio = totalFac - costs;
+            const margenPct = totalFac > 0 ? (beneficio / totalFac) * 100 : 0;
+
+            return (
+              <div key={srv.sid} className={`rounded-xl border-2 p-4 ${margenPct >= 20 ? "border-green-200 bg-green-50" : margenPct >= 0 ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50"}`}>
+                <p className="text-sm font-semibold text-gray-800">{srv.name || `Servicio ${srv.sid}`}</p>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className={`text-2xl font-bold ${margenPct >= 20 ? "text-green-700" : margenPct >= 0 ? "text-amber-700" : "text-red-700"}`}>
+                    {margenPct.toFixed(1)}%
+                  </span>
+                  <span className="text-xs text-gray-500">margen</span>
+                </div>
+                {/* Cost breakdown mini-bars */}
+                <div className="mt-2 flex gap-0.5 overflow-hidden rounded-full" style={{ height: "6px" }}>
+                  {COST_GROUPS.map((g) => {
+                    const groupCost = serviceCosts[srv.sid]?.byGroup[g.key] ?? 0;
+                    const pct = totalFac > 0 ? (groupCost / totalFac) * 100 : 0;
+                    if (pct === 0) return null;
+                    return (
+                      <div
+                        key={g.key}
+                        className={`${g.color}`}
+                        style={{ width: `${pct}%` }}
+                        title={`${g.label}: ${fmt(groupCost)} (${pct.toFixed(1)}%)`}
+                      />
+                    );
+                  })}
+                  {margenPct > 0 && (
+                    <div className="bg-green-400" style={{ width: `${margenPct}%` }} title={`Margen: ${fmt(beneficio)}`} />
+                  )}
+                </div>
+                <div className="mt-1 flex justify-between text-[10px] text-gray-400">
+                  <span>Costes: {fmt(costs)}</span>
+                  <span>Beneficio: {fmt(beneficio)}</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Card>
     </div>
