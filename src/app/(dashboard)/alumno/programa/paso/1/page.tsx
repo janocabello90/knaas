@@ -1245,7 +1245,7 @@ function SeccionD({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
 const COST_GROUPS = [
   { key: "APROV", label: "Aprovisionamiento", color: "bg-amber-500" },
   { key: "INFRA", label: "Infraestructura", color: "bg-blue-500" },
-  { key: "PERS_CLIN", label: "Personal clínico", color: "bg-teal-500" },
+  { key: "PERS_CLIN", label: "Personal clínico", color: "bg-indigo-500" },
   { key: "PERS_GEST", label: "Personal gestión", color: "bg-purple-500" },
   { key: "MKT", label: "Marketing", color: "bg-pink-500" },
   { key: "OTROS", label: "Otros", color: "bg-gray-500" },
