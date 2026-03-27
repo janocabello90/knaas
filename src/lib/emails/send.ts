@@ -49,6 +49,7 @@ import {
   transferPendingVerification,
   transferVerified,
   welcomeEnrollment,
+  welcomeWithCredentials,
   paymentReminder,
   paymentRefunded,
 } from "./templates";
@@ -115,6 +116,19 @@ export async function sendWelcome(
     subject,
     html,
     tags: [{ name: "type", value: "welcome" }],
+  });
+}
+
+export async function sendWelcomeWithCredentials(
+  to: string,
+  data: Parameters<typeof welcomeWithCredentials>[0]
+) {
+  const { subject, html } = welcomeWithCredentials(data);
+  return sendEmail({
+    to,
+    subject,
+    html,
+    tags: [{ name: "type", value: "welcome_credentials" }],
   });
 }
 

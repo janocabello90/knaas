@@ -220,6 +220,37 @@ export function welcomeEnrollment(data: {
   };
 }
 
+// ─── 5b. Welcome with Credentials (Admin Enrollment) ───────────────
+export function welcomeWithCredentials(data: {
+  firstName: string;
+  cohortName: string;
+  loginUrl: string;
+  email: string;
+  tempPassword: string;
+}) {
+  const html = baseLayout(
+    `<h2 style="margin:0 0 16px;font-size:22px;color:#1e293b;">¡Bienvenido/a a FisioReferentes!</h2>
+    <p>Hola <strong>${data.firstName}</strong>,</p>
+    <p>Ya tienes acceso a la plataforma <strong>Academia FisioReferentes</strong>. Has sido inscrito/a en <strong>${data.cohortName}</strong>.</p>
+    <p>Aquí tienes tus credenciales de acceso:</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+      <tr><td style="padding:12px 16px;background:#f8fafc;font-weight:600;border-bottom:1px solid #e2e8f0;width:140px;">Email</td>
+          <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">${data.email}</td></tr>
+      <tr><td style="padding:12px 16px;background:#f8fafc;font-weight:600;width:140px;">Contraseña temporal</td>
+          <td style="padding:12px 16px;font-family:monospace;font-size:16px;letter-spacing:1px;">${data.tempPassword}</td></tr>
+    </table>
+    <p style="font-size:14px;color:#e74c3c;font-weight:600;">⚠️ Te recomendamos cambiar la contraseña en cuanto accedas, desde Área Privada → Seguridad.</p>
+    ${button("Acceder a la plataforma", data.loginUrl)}
+    <p style="margin-top:24px;font-size:14px;color:#64748b;">Si tienes cualquier problema para acceder, responde a este email y te ayudamos.</p>`,
+    `Bienvenido/a a Academia FisioReferentes`
+  );
+
+  return {
+    subject: `Tus credenciales de acceso a ${data.cohortName} | FisioReferentes`,
+    html,
+  };
+}
+
 // ─── 6. Payment Reminder ───────────────────────────────────────────
 export function paymentReminder(data: {
   firstName: string;

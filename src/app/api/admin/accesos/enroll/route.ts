@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { sendWelcomeWithCredentials } from "@/lib/emails/send";
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,17 +54,20 @@ export async function POST(request: NextRequest) {
       where: { email },
     });
 
+    let isNewUser = false;
+    let tempPassword = "";
+
     // Create user if doesn't exist
     if (!dbUser) {
-      // Generate temporary password
-      const tempPassword = crypto.randomBytes(12).toString("hex");
+      isNewUser = true;
+      tempPassword = crypto.randomBytes(12).toString("hex");
 
-      // Create auth user in Supabase
+      // Create auth user in Supabase (email_confirm: true so they can login immediately)
       const { data: authUser, error: authError } =
         await supabase.auth.admin.createUser({
           email,
           password: tempPassword,
-          email_confirm: false,
+          email_confirm: true,
           user_metadata: {
             firstName,
             lastName,
@@ -73,7 +77,7 @@ export async function POST(request: NextRequest) {
       if (authError || !authUser.user) {
         console.error("Error creating auth user:", authError);
         return NextResponse.json(
-          { error: "Failed to create user" },
+          { error: `Failed to create user: ${authError?.message || "unknown error"}` },
           { status: 400 }
         );
       }
@@ -132,6 +136,24 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // Send welcome email with credentials (only for new users)
+    if (isNewUser) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://academia.fisioreferentes.com";
+      try {
+        await sendWelcomeWithCredentials(email, {
+          firstName,
+          cohortName: cohort.name,
+          loginUrl: `${appUrl}/login`,
+          email,
+          tempPassword,
+        });
+        console.log(`[Enroll] Welcome email with credentials sent to ${email}`);
+      } catch (emailErr) {
+        // Don't fail enrollment if email fails — user is already created
+        console.error("[Enroll] Failed to send welcome email:", emailErr);
+      }
+    }
 
     return NextResponse.json(enrollment, { status: 201 });
   } catch (error) {
