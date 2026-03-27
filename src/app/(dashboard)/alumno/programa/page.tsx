@@ -47,12 +47,30 @@ export default async function ProgramaPage() {
   const completedSteps = enrollment?.stepProgress.filter(
     (s: StepProgress) => s.status === "COMPLETED"
   ).length ?? 0;
-  const totalSteps = 16;
+  const totalSteps = ACTIVA_STEPS.length; // 17 (0-16)
   const progressPct = Math.round((completedSteps / totalSteps) * 100);
 
   const currentStep = enrollment?.stepProgress.find(
     (s: StepProgress) => s.status === "IN_PROGRESS"
   );
+
+  // ── Weekly time-gating ──
+  // Each step unlocks 1 per week from enrollment date.
+  // Step 0 → week 1, Step 1 → week 1, Step 2 → week 2, etc.
+  // Admins bypass time-gating.
+  const enrolledAt = enrollment?.enrolledAt ? new Date(enrollment.enrolledAt) : null;
+  const now = new Date();
+  const weeksElapsed = enrolledAt
+    ? Math.floor((now.getTime() - enrolledAt.getTime()) / (7 * 24 * 60 * 60 * 1000))
+    : 0;
+
+  function isStepUnlockedByTime(stepNumber: number): boolean {
+    if (isAdmin) return true;
+    if (!enrolledAt) return false;
+    // Step 0 and 1 unlock in week 0 (first week), step 2 in week 1, etc.
+    const unlockWeek = stepNumber <= 1 ? 0 : stepNumber - 1;
+    return weeksElapsed >= unlockWeek;
+  }
 
   // Group steps by month
   const stepsByMonth = ACTIVA_STEPS.reduce((acc, step) => {
@@ -74,7 +92,7 @@ export default async function ProgramaPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Mi Programa ACTIVA</h1>
         <p className="mt-1 text-sm text-gray-500">
-          {enrollment?.cohort.name ?? "Sin cohorte asignada"} &middot; 16 pasos &middot; 4 meses
+          {enrollment?.cohort.name ?? "Sin cohorte asignada"} &middot; 17 pasos (0–16) &middot; 4 meses
         </p>
       </div>
 
@@ -99,7 +117,7 @@ export default async function ProgramaPage() {
           <p className="mt-3 text-sm text-gray-600">
             Paso actual:{" "}
             <strong>
-              {currentStep.stepNumber}. {ACTIVA_STEPS[currentStep.stepNumber - 1]?.name}
+              {currentStep.stepNumber}. {ACTIVA_STEPS.find(s => s.number === currentStep.stepNumber)?.name}
             </strong>
           </p>
         )}
@@ -123,7 +141,9 @@ export default async function ProgramaPage() {
             <div className="space-y-3">
               {steps.map((step) => {
                 const progress = stepProgressMap.get(step.number);
-                const status = progress?.status ?? (isAdmin ? "AVAILABLE" : "LOCKED");
+                const timeUnlocked = isStepUnlockedByTime(step.number);
+                const status = progress?.status
+                  ?? (timeUnlocked ? "AVAILABLE" : "LOCKED");
                 const isActive = status === "IN_PROGRESS";
                 const isCompleted = status === "COMPLETED";
                 const isLocked = status === "LOCKED";
@@ -165,6 +185,16 @@ export default async function ProgramaPage() {
                           </h3>
                           <span className="text-xs text-gray-400">{step.hours}h</span>
                         </div>
+
+                        {isLocked && !isAdmin && enrolledAt && (
+                          <p className="mt-0.5 text-xs text-gray-400">
+                            Se desbloquea el{" "}
+                            {new Date(
+                              enrolledAt.getTime() +
+                                (step.number <= 1 ? 0 : (step.number - 1)) * 7 * 24 * 60 * 60 * 1000
+                            ).toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
+                          </p>
+                        )}
 
                         {!isLocked && (
                           <div className="mt-1.5 flex items-center gap-3">
@@ -235,7 +265,7 @@ export default async function ProgramaPage() {
           OPTIMIZA y ESCALA se desbloquean al completar ACTIVA
         </p>
         <p className="mt-1 text-xs text-gray-400">
-          El siguiente paso después de los 16 pasos de ACTIVA
+          El siguiente paso después de los 17 pasos de ACTIVA
         </p>
       </div>
     </div>

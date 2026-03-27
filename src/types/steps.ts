@@ -18,6 +18,21 @@ export interface StepDefinition {
 
 export const ACTIVA_STEPS: StepDefinition[] = [
   {
+    number: 0,
+    name: "Mentalidad: de Fisio a Empresario",
+    month: 1,
+    monthLabel: "Diagnóstico, autoconocimiento y claridad estratégica",
+    hours: 4,
+    theory: "El salto de identidad: de técnico a dueño. Creencias limitantes del fisioterapeuta. El coste de no cambiar. Responsabilidad total. El compromiso con el proceso.",
+    mainExercise: "Reflexión guiada sobre tu situación actual como dueño, tus miedos, tus excusas y lo que estás dispuesto a cambiar. Carta de compromiso contigo mismo.",
+    outputs: ["Autoevaluación de mentalidad empresarial", "Carta de compromiso personal"],
+    mentors: ["Alex Vallés"],
+    knaasCompanion: "Guía la reflexión profunda sobre la identidad fisio vs empresario, detecta creencias limitantes y ayuda a formular el compromiso personal con el programa.",
+    saber: "Comprende la diferencia entre ser técnico y ser empresario, y puede identificar sus propias creencias limitantes.",
+    decidir: "Ha decidido comprometerse con el cambio de mentalidad y ha identificado qué está dispuesto a hacer diferente.",
+    hacer: "Tiene la autoevaluación completada y la carta de compromiso redactada en sus propias palabras.",
+  },
+  {
     number: 1,
     name: "Diagnóstico 360°",
     month: 1,

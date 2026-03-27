@@ -292,7 +292,7 @@ model Enrollment {
 model StepProgress {
   id           String     @id @default(uuid())
   enrollmentId String     @map("enrollment_id")
-  stepNumber   Int        @map("step_number") // 1-16
+  stepNumber   Int        @map("step_number") // 0-16
   status       StepStatus @default(LOCKED)
   saber        Boolean    @default(false)
   decidir      Boolean    @default(false)
