@@ -382,29 +382,39 @@ model KpiSnapshot {
   clinicId        String   @map("clinic_id")
   monthYear       String   @map("month_year") // "2026-04"
 
-  // — Per-service & per-worker data (JSON) —
-  // serviceData: { "1": { revenue: 5000, sessions: 80 }, "2": { revenue: 3000, sessions: 50 } }
+  // — Per-service data (JSON) —
+  // { "1": { revenue: 5000, sessions: 80, uniquePatients12m: 120 }, ... }
   serviceData     Json?    @map("service_data")
-  // workerData: { "1": { revenue: 4000, sessions: 60 }, "2": { revenue: 3500, sessions: 55 } }
+  // — Per-worker data (JSON) —
+  // { "1": { revenue: 4000, sessions: 60, isOwner: true }, ... }
   workerData      Json?    @map("worker_data")
 
   // — Monthly inputs —
-  newPatients     Int?     @map("new_patients")      // Pacientes nuevos este mes
-  totalPatients   Int?     @map("total_patients")     // Pacientes únicos que han venido este mes
-  totalSessions   Int?     @map("total_sessions")     // Sesiones totales este mes
-  nps             Float?                               // Net Promoter Score (-100 a 100)
-  churnPct        Float?   @map("churn_pct")          // % de pacientes que dejan de venir
-  occupancy       Float?                               // % de ocupación
-  ownerHours      Float?   @map("owner_hours")        // Horas semanales propietario
-  grossMargin     Float?   @map("gross_margin")       // % de margen bruto
+  newPatients     Int?     @map("new_patients")           // Pacientes nuevos este mes
+  nps             Float?                                   // NPS (0 a 10)
+
+  // — Churn inputs (rolling 12 months) —
+  totalPatients12m    Int?  @map("total_patients_12m")     // Pacientes totales últimos 12 meses
+  singleVisitPat12m   Int?  @map("single_visit_pat_12m")   // Pacientes con 1 sola visita en 12 meses
+
+  // — Optional manual monthly expenses (JSON) —
+  // { "APROV": 500, "INFRA": 2000, ... }
+  monthlyExpenses     Json?    @map("monthly_expenses")
+  useManualExpenses   Boolean  @default(false) @map("use_manual_expenses")
 
   // — Auto-calculated (computed on save) —
-  revenue         Float?                               // Sum of all service revenues
-  avgTicket       Float?   @map("avg_ticket")          // revenue / totalSessions
-  recurrenceRate  Float?   @map("recurrence_rate")     // Rolling 12m: totalSessions / totalPatients
+  revenue         Float?                                   // Sum of all service revenues
+  totalSessions   Int?     @map("total_sessions")          // Sum of all service sessions
+  avgTicket       Float?   @map("avg_ticket")              // revenue / totalSessions
+  recurrenceRate  Float?   @map("recurrence_rate")         // Per-service recurrence stored in serviceData
+  churnPct        Float?   @map("churn_pct")               // singleVisitPat12m / totalPatients12m × 100
+  occupancy       Float?                                   // sessionHours / availableHours × 100
+  grossMargin     Float?   @map("gross_margin")            // (revenue - costs) / revenue × 100
+  ownerHours      Float?   @map("owner_hours")             // Kept for display
 
   // — Legacy (kept for backward compat) —
   patientsActive  Int?     @map("patients_active")
+  totalPatients   Int?     @map("total_patients")
 
   isBaseline      Boolean  @default(false) @map("is_baseline")
   createdAt       DateTime @default(now()) @map("created_at")

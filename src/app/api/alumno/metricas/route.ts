@@ -44,7 +44,6 @@ export async function POST(request: Request) {
   }
 
   let clinic = user.clinics[0];
-
   const body = await request.json();
   const { monthYear, ...kpiData } = body;
 
@@ -58,53 +57,52 @@ export async function POST(request: Request) {
   // Auto-create clinic if not exists
   if (!clinic) {
     clinic = await prisma.clinic.create({
-      data: {
-        userId: user.id,
-        name: `Clínica de ${user.firstName}`,
-      },
+      data: { userId: user.id, name: `Clínica de ${user.firstName}` },
     });
   }
 
-  // ── Compute auto-calculated fields ──────────────────────────
+  // ── Parse inputs ────────────────────────────────────────────
   const serviceData = kpiData.serviceData ?? null;
   const workerData = kpiData.workerData ?? null;
+  const monthlyExpenses = kpiData.monthlyExpenses ?? null;
+  const useManualExpenses = kpiData.useManualExpenses ?? false;
 
-  // Revenue = sum of all service revenues
-  let computedRevenue: number | null = null;
-  let computedTotalSessions: number | null = null;
+  // ── Compute revenue & sessions from services ────────────────
+  let computedRevenue = 0;
+  let computedTotalSessions = 0;
   if (serviceData && typeof serviceData === "object") {
     const entries = Object.values(serviceData) as { revenue?: number; sessions?: number }[];
-    const revSum = entries.reduce((acc, e) => acc + (Number(e.revenue) || 0), 0);
-    const sesSum = entries.reduce((acc, e) => acc + (Number(e.sessions) || 0), 0);
-    if (revSum > 0) computedRevenue = revSum;
-    if (sesSum > 0) computedTotalSessions = sesSum;
+    computedRevenue = entries.reduce((acc, e) => acc + (Number(e.revenue) || 0), 0);
+    computedTotalSessions = entries.reduce((acc, e) => acc + (Number(e.sessions) || 0), 0);
   }
 
-  // Use explicit totalSessions if provided, else computed from services
-  const finalTotalSessions = kpiData.totalSessions != null
-    ? parseInt(String(kpiData.totalSessions))
-    : computedTotalSessions;
+  // ── Ticket medio ────────────────────────────────────────────
+  const avgTicket = computedTotalSessions > 0
+    ? Math.round((computedRevenue / computedTotalSessions) * 100) / 100
+    : null;
 
-  // Use explicit revenue if provided, else computed from services
-  const finalRevenue = kpiData.revenue != null
-    ? parseFloat(String(kpiData.revenue))
-    : computedRevenue;
-
-  // Ticket medio = revenue / totalSessions
-  let avgTicket: number | null = null;
-  if (finalRevenue && finalTotalSessions && finalTotalSessions > 0) {
-    avgTicket = finalRevenue / finalTotalSessions;
+  // ── Churn rate ──────────────────────────────────────────────
+  const totalPatients12m = kpiData.totalPatients12m != null ? parseInt(String(kpiData.totalPatients12m)) : null;
+  const singleVisitPat12m = kpiData.singleVisitPat12m != null ? parseInt(String(kpiData.singleVisitPat12m)) : null;
+  let churnPct: number | null = null;
+  if (totalPatients12m && totalPatients12m > 0 && singleVisitPat12m != null) {
+    churnPct = Math.round((singleVisitPat12m / totalPatients12m) * 10000) / 100;
   }
 
-  // ── Tasa de recurrencia (rolling 12 months) ─────────────────
-  // Get last 12 months of snapshots for this clinic
+  // ── Occupancy ───────────────────────────────────────────────
+  // Passed pre-computed from client (needs diagnostico data for service mins & worker hours)
+  const occupancy = kpiData.occupancy != null ? parseFloat(String(kpiData.occupancy)) : null;
+
+  // ── Gross margin ────────────────────────────────────────────
+  const grossMargin = kpiData.grossMargin != null ? parseFloat(String(kpiData.grossMargin)) : null;
+
+  // ── Recurrence per service (rolling 12m) ────────────────────
+  // We compute a global recurrence for display, per-service is in serviceData
   let recurrenceRate: number | null = null;
   try {
     const [yearStr, monthStr] = monthYear.split("-");
     const year = parseInt(yearStr);
     const month = parseInt(monthStr);
-
-    // Build 12-month range
     const months12: string[] = [];
     for (let i = 0; i < 12; i++) {
       let m = month - i;
@@ -114,28 +112,32 @@ export async function POST(request: Request) {
     }
 
     const last12 = await prisma.kpiSnapshot.findMany({
-      where: {
-        clinicId: clinic.id,
-        monthYear: { in: months12 },
-      },
-      select: { monthYear: true, totalSessions: true, totalPatients: true },
+      where: { clinicId: clinic.id, monthYear: { in: months12 } },
+      select: { monthYear: true, serviceData: true },
     });
 
-    // Include current submission in the calculation
-    const allData = [
+    // Sum sessions across all services for all 12 months
+    let totalSes12 = 0;
+    const allSnapshots = [
       ...last12.filter((s) => s.monthYear !== monthYear),
-      {
-        monthYear,
-        totalSessions: finalTotalSessions,
-        totalPatients: kpiData.totalPatients != null ? parseInt(String(kpiData.totalPatients)) : null,
-      },
+      { monthYear, serviceData },
     ];
+    allSnapshots.forEach((snap) => {
+      if (snap.serviceData && typeof snap.serviceData === "object") {
+        const entries = Object.values(snap.serviceData as Record<string, { sessions?: number }>);
+        totalSes12 += entries.reduce((acc, e) => acc + (Number(e.sessions) || 0), 0);
+      }
+    });
 
-    const totalSes12 = allData.reduce((acc, s) => acc + (s.totalSessions ?? 0), 0);
-    const totalPat12 = allData.reduce((acc, s) => acc + (s.totalPatients ?? 0), 0);
+    // Sum unique patients from current month's service data
+    let totalUniquePat = 0;
+    if (serviceData && typeof serviceData === "object") {
+      const entries = Object.values(serviceData as Record<string, { uniquePatients12m?: number }>);
+      totalUniquePat = entries.reduce((acc, e) => acc + (Number(e.uniquePatients12m) || 0), 0);
+    }
 
-    if (totalPat12 > 0 && totalSes12 > 0) {
-      recurrenceRate = Math.round((totalSes12 / totalPat12) * 100) / 100;
+    if (totalUniquePat > 0 && totalSes12 > 0) {
+      recurrenceRate = Math.round((totalSes12 / totalUniquePat) * 100) / 100;
     }
   } catch (err) {
     console.error("Error computing recurrence rate:", err);
@@ -145,34 +147,29 @@ export async function POST(request: Request) {
   const data = {
     serviceData: serviceData ?? undefined,
     workerData: workerData ?? undefined,
+    monthlyExpenses: monthlyExpenses ?? undefined,
+    useManualExpenses,
     newPatients: kpiData.newPatients != null ? parseInt(String(kpiData.newPatients)) : null,
-    totalPatients: kpiData.totalPatients != null ? parseInt(String(kpiData.totalPatients)) : null,
-    totalSessions: finalTotalSessions,
-    revenue: finalRevenue,
+    totalPatients12m,
+    singleVisitPat12m,
+    nps: kpiData.nps != null ? parseFloat(String(kpiData.nps)) : null,
+    revenue: computedRevenue > 0 ? computedRevenue : null,
+    totalSessions: computedTotalSessions > 0 ? computedTotalSessions : null,
     avgTicket,
     recurrenceRate,
-    nps: kpiData.nps != null ? parseFloat(String(kpiData.nps)) : null,
-    churnPct: kpiData.churnPct != null ? parseFloat(String(kpiData.churnPct)) : null,
-    occupancy: kpiData.occupancy != null ? parseFloat(String(kpiData.occupancy)) : null,
+    churnPct,
+    occupancy,
+    grossMargin,
     ownerHours: kpiData.ownerHours != null ? parseFloat(String(kpiData.ownerHours)) : null,
-    grossMargin: kpiData.grossMargin != null ? parseFloat(String(kpiData.grossMargin)) : null,
-    patientsActive: kpiData.totalPatients != null ? parseInt(String(kpiData.totalPatients)) : null,
+    patientsActive: totalPatients12m,
     isBaseline: kpiData.isBaseline ?? false,
   };
 
-  // Upsert: create or update
   const snapshot = await prisma.kpiSnapshot.upsert({
     where: {
-      clinicId_monthYear: {
-        clinicId: clinic.id,
-        monthYear,
-      },
+      clinicId_monthYear: { clinicId: clinic.id, monthYear },
     },
-    create: {
-      clinicId: clinic.id,
-      monthYear,
-      ...data,
-    },
+    create: { clinicId: clinic.id, monthYear, ...data },
     update: data,
   });
 
