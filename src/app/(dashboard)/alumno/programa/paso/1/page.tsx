@@ -124,11 +124,32 @@ const DEFAULT_EJ1: Ej1Data = {
   srvs: [],
   wrks: [],
   gastos: [
-    { id: 1, concepto: "Alquiler", partida: "LOCAL", valor: 0 },
-    { id: 2, concepto: "Nóminas", partida: "PERSONAL", valor: 0 },
-    { id: 3, concepto: "Seguros", partida: "SEGUROS", valor: 0 },
-    { id: 4, concepto: "Suministros", partida: "SUMINISTROS", valor: 0 },
-    { id: 5, concepto: "Marketing", partida: "MARKETING", valor: 0 },
+    // Aprovisionamiento
+    { id: 1, concepto: "Compras de mercancías / mantenimiento instalación", partida: "APROV_COMPRAS", valor: 0 },
+    { id: 2, concepto: "Material de oficina y recepción", partida: "APROV_OFICINA", valor: 0 },
+    { id: 3, concepto: "Suministros desechables y fungibles", partida: "APROV_FUNGIBLES", valor: 0 },
+    // Infraestructura
+    { id: 4, concepto: "Arrendamientos y cánones", partida: "INFRA_ALQUILER", valor: 0 },
+    { id: 5, concepto: "Gastos de comunidad e IBI", partida: "INFRA_COMUNIDAD", valor: 0 },
+    { id: 6, concepto: "Reparaciones y conservación", partida: "INFRA_REPARACIONES", valor: 0 },
+    { id: 7, concepto: "Servicios bancarios y similares", partida: "INFRA_BANCO", valor: 0 },
+    { id: 8, concepto: "Suministros agua, gas y electricidad", partida: "INFRA_SUMINISTROS", valor: 0 },
+    { id: 9, concepto: "Primas de seguros", partida: "INFRA_SEGUROS", valor: 0 },
+    { id: 10, concepto: "Teléfono e internet", partida: "INFRA_TELECOM", valor: 0 },
+    { id: 11, concepto: "Hosting, web y dominios", partida: "INFRA_HOSTING", valor: 0 },
+    { id: 12, concepto: "Renting de máquinas y amortizaciones", partida: "INFRA_RENTING", valor: 0 },
+    { id: 13, concepto: "Software de gestión", partida: "INFRA_SOFTWARE", valor: 0 },
+    { id: 14, concepto: "Otros servicios (desinfección, residuos...)", partida: "INFRA_OTROS", valor: 0 },
+    // Personal clínico
+    { id: 15, concepto: "Sueldos y salarios — personal clínico", partida: "PERS_CLIN_SUELDOS", valor: 0 },
+    { id: 16, concepto: "Gastos sociales y SS — clínico", partida: "PERS_CLIN_SS", valor: 0 },
+    { id: 17, concepto: "Coste propio propietario como clínico (sombrero fisio)", partida: "PERS_CLIN_PROP", valor: 0 },
+    // Personal gestión
+    { id: 18, concepto: "Sueldos y salarios — personal gestión", partida: "PERS_GEST_SUELDOS", valor: 0 },
+    { id: 19, concepto: "Gastos sociales y SS — gestión", partida: "PERS_GEST_SS", valor: 0 },
+    { id: 20, concepto: "Prestación de servicios de otros profesionales", partida: "PERS_GEST_EXTERNO", valor: 0 },
+    // Marketing
+    { id: 21, concepto: "Marketing y publicidad", partida: "MKT", valor: 0 },
   ],
   dIngSrv: 0, dIngOtros: 0,
 };
@@ -1122,17 +1143,44 @@ function SeccionD({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
                     ),
                   }))
                 }
-                className="w-36 rounded-md border border-gray-300 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                className="w-64 rounded-md border border-gray-300 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
               >
-                <option value="LOCAL">Local</option>
-                <option value="PERSONAL">Personal</option>
-                <option value="SEGUROS">Seguros</option>
-                <option value="SUMINISTROS">Suministros</option>
-                <option value="MARKETING">Marketing</option>
-                <option value="FORMACION">Formación</option>
-                <option value="MATERIAL">Material clínico</option>
-                <option value="TECNOLOGIA">Tecnología</option>
-                <option value="OTROS">Otros</option>
+                <option value="" disabled>— Selecciona partida —</option>
+                <optgroup label="Aprovisionamiento">
+                  <option value="APROV_COMPRAS">Compras de mercancías / mant. instalación</option>
+                  <option value="APROV_OFICINA">Material de oficina y recepción</option>
+                  <option value="APROV_FUNGIBLES">Suministros desechables y fungibles</option>
+                  <option value="APROV_EXTERNO">Trabajos realizados por otras empresas</option>
+                </optgroup>
+                <optgroup label="Infraestructura">
+                  <option value="INFRA_ALQUILER">Arrendamientos y cánones</option>
+                  <option value="INFRA_COMUNIDAD">Gastos de comunidad e IBI</option>
+                  <option value="INFRA_REPARACIONES">Reparaciones y conservación</option>
+                  <option value="INFRA_BANCO">Servicios bancarios y similares</option>
+                  <option value="INFRA_SUMINISTROS">Suministros agua, gas y electricidad</option>
+                  <option value="INFRA_SEGUROS">Primas de seguros</option>
+                  <option value="INFRA_TELECOM">Teléfono e internet</option>
+                  <option value="INFRA_HOSTING">Hosting, web y dominios</option>
+                  <option value="INFRA_RENTING">Renting de máquinas y amortizaciones</option>
+                  <option value="INFRA_SOFTWARE">Software de gestión</option>
+                  <option value="INFRA_OTROS">Otros servicios (desinfección, residuos...)</option>
+                </optgroup>
+                <optgroup label="Personal clínico">
+                  <option value="PERS_CLIN_SUELDOS">Sueldos y salarios — personal clínico</option>
+                  <option value="PERS_CLIN_SS">Gastos sociales y SS — clínico</option>
+                  <option value="PERS_CLIN_PROP">Coste propio propietario como clínico</option>
+                </optgroup>
+                <optgroup label="Personal gestión">
+                  <option value="PERS_GEST_SUELDOS">Sueldos y salarios — personal gestión</option>
+                  <option value="PERS_GEST_SS">Gastos sociales y SS — gestión</option>
+                  <option value="PERS_GEST_EXTERNO">Prestación de servicios de otros profesionales</option>
+                </optgroup>
+                <optgroup label="Marketing">
+                  <option value="MKT">Marketing y publicidad</option>
+                </optgroup>
+                <optgroup label="Otros">
+                  <option value="OTROS">Otros gastos</option>
+                </optgroup>
               </select>
               <div className="w-28">
                 <NumInput
