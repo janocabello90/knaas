@@ -381,16 +381,32 @@ model KpiSnapshot {
   id              String   @id @default(uuid())
   clinicId        String   @map("clinic_id")
   monthYear       String   @map("month_year") // "2026-04"
+
+  // — Per-service & per-worker data (JSON) —
+  // serviceData: { "1": { revenue: 5000, sessions: 80 }, "2": { revenue: 3000, sessions: 50 } }
+  serviceData     Json?    @map("service_data")
+  // workerData: { "1": { revenue: 4000, sessions: 60 }, "2": { revenue: 3500, sessions: 55 } }
+  workerData      Json?    @map("worker_data")
+
+  // — Monthly inputs —
+  newPatients     Int?     @map("new_patients")      // Pacientes nuevos este mes
+  totalPatients   Int?     @map("total_patients")     // Pacientes únicos que han venido este mes
+  totalSessions   Int?     @map("total_sessions")     // Sesiones totales este mes
+  nps             Float?                               // Net Promoter Score (-100 a 100)
+  churnPct        Float?   @map("churn_pct")          // % de pacientes que dejan de venir
+  occupancy       Float?                               // % de ocupación
+  ownerHours      Float?   @map("owner_hours")        // Horas semanales propietario
+  grossMargin     Float?   @map("gross_margin")       // % de margen bruto
+
+  // — Auto-calculated (computed on save) —
+  revenue         Float?                               // Sum of all service revenues
+  avgTicket       Float?   @map("avg_ticket")          // revenue / totalSessions
+  recurrenceRate  Float?   @map("recurrence_rate")     // Rolling 12m: totalSessions / totalPatients
+
+  // — Legacy (kept for backward compat) —
   patientsActive  Int?     @map("patients_active")
-  avgTicket       Float?   @map("avg_ticket")
-  recurrenceRate  Float?   @map("recurrence_rate")
-  ownerHours      Float?   @map("owner_hours")
-  grossMargin     Float?   @map("gross_margin")
-  revenue         Float?
-  nps             Float?
-  occupancy       Float?
-  churnPct        Float?   @map("churn_pct")
-  isBaseline      Boolean  @default(false) @map("is_baseline") // P1 snapshot
+
+  isBaseline      Boolean  @default(false) @map("is_baseline")
   createdAt       DateTime @default(now()) @map("created_at")
 
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
