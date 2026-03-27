@@ -1265,6 +1265,7 @@ function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
     return data.srvs.length > 0 ? Math.round((100 / data.srvs.length) * 10) / 10 : 0;
   };
 
+  // Independent allocation — no auto-balance, each slider is independent
   const setAlloc = (groupKey: string, sid: number, value: number) => {
     update((prev) => {
       const prevAlloc = prev.costAlloc || {};
@@ -1277,49 +1278,7 @@ function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
         });
       }
 
-      groupAlloc[sid] = Math.max(0, Math.min(100, value));
-
-      return {
-        ...prev,
-        costAlloc: { ...prevAlloc, [groupKey]: groupAlloc },
-      };
-    });
-  };
-
-  // Auto-balance: when one slider changes, distribute remaining among others
-  const setAllocBalanced = (groupKey: string, sid: number, newValue: number) => {
-    update((prev) => {
-      const prevAlloc = prev.costAlloc || {};
-      const groupAlloc = { ...(prevAlloc[groupKey] || {}) };
-
-      // Initialize if needed
-      if (Object.keys(groupAlloc).length === 0) {
-        prev.srvs.forEach((s) => {
-          groupAlloc[s.sid] = Math.round((100 / prev.srvs.length) * 10) / 10;
-        });
-      }
-
-      const clamped = Math.max(0, Math.min(100, newValue));
-      const oldValue = groupAlloc[sid] ?? (100 / prev.srvs.length);
-      const otherSids = prev.srvs.filter((s) => s.sid !== sid).map((s) => s.sid);
-
-      if (otherSids.length === 0) {
-        groupAlloc[sid] = 100;
-      } else {
-        groupAlloc[sid] = clamped;
-        const remaining = 100 - clamped;
-        const otherTotal = sum(otherSids.map((s) => groupAlloc[s] ?? (100 / prev.srvs.length)));
-
-        if (otherTotal > 0) {
-          otherSids.forEach((s) => {
-            const current = groupAlloc[s] ?? (100 / prev.srvs.length);
-            groupAlloc[s] = Math.round((current / otherTotal) * remaining * 10) / 10;
-          });
-        } else {
-          const each = Math.round((remaining / otherSids.length) * 10) / 10;
-          otherSids.forEach((s) => { groupAlloc[s] = each; });
-        }
-      }
+      groupAlloc[sid] = Math.max(0, value);
 
       return {
         ...prev,
@@ -1354,11 +1313,11 @@ function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
       <InstructionDropdown
         color="green"
         title="Instrucciones: Repercusión de costes"
-        intro="Distribuye el porcentaje de cada partida de gasto entre tus servicios. Esto te permitirá conocer el margen real unitario de cada servicio. Usa los sliders o introduce el porcentaje manualmente. El total de cada partida debe sumar 100%."
+        intro="Distribuye el porcentaje de cada partida de gasto entre tus servicios. Esto te permitirá conocer el margen real unitario de cada servicio. Usa los sliders o introduce el porcentaje manualmente. El total de cada partida debe sumar exactamente 100%."
         steps={[
           "Para cada grupo de costes (Aprovisionamiento, Infraestructura, etc.) distribuye el % entre servicios.",
-          "Mueve los sliders o escribe el porcentaje directamente.",
-          "El sistema ajusta automáticamente los demás servicios para que siempre sume 100%.",
+          "Mueve los sliders o escribe el porcentaje directamente. Cada servicio es independiente.",
+          "Asegúrate de que la suma de cada partida sea exactamente 100%. Si no lo es, verás un aviso.",
           "Abajo verás el margen unitario resultante de cada servicio.",
         ]}
       />
@@ -1373,10 +1332,12 @@ function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
         return (
           <Card key={group.key} title={group.label} subtitle={`Total: ${fmt(groupTotal)} — Reparte entre servicios`}>
             {/* Balance indicator */}
-            <div className="mb-4 flex items-center gap-2">
-              <div className={`h-2 w-2 rounded-full ${Math.abs(groupSum - 100) < 0.5 ? "bg-green-500" : "bg-amber-500"}`} />
-              <span className={`text-xs font-medium ${Math.abs(groupSum - 100) < 0.5 ? "text-green-600" : "text-amber-600"}`}>
-                {groupSum.toFixed(1)}% asignado {Math.abs(groupSum - 100) < 0.5 ? "— OK" : `(debe ser 100%)`}
+            <div className={`mb-4 flex items-center gap-2 rounded-lg px-3 py-2 ${Math.abs(groupSum - 100) < 0.5 ? "bg-green-50" : "bg-red-50"}`}>
+              <div className={`h-2.5 w-2.5 rounded-full ${Math.abs(groupSum - 100) < 0.5 ? "bg-green-500" : "bg-red-500"}`} />
+              <span className={`text-sm font-medium ${Math.abs(groupSum - 100) < 0.5 ? "text-green-700" : "text-red-700"}`}>
+                {Math.abs(groupSum - 100) < 0.5
+                  ? `${groupSum.toFixed(1)}% — Correcto`
+                  : `${groupSum.toFixed(1)}% — La suma debe ser exactamente 100%`}
               </span>
             </div>
 
@@ -1397,12 +1358,12 @@ function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
                         max={100}
                         step={0.5}
                         value={pctValue}
-                        onChange={(e) => setAllocBalanced(group.key, srv.sid, parseFloat(e.target.value))}
+                        onChange={(e) => setAlloc(group.key, srv.sid, parseFloat(e.target.value))}
                         className="h-2 w-full cursor-pointer appearance-none rounded-full bg-gray-200 accent-blue-600"
                       />
                       <div
                         className={`absolute top-0 left-0 h-2 rounded-full pointer-events-none ${group.color} opacity-30`}
-                        style={{ width: `${pctValue}%` }}
+                        style={{ width: `${Math.min(pctValue, 100)}%` }}
                       />
                     </div>
                     {/* Manual input */}
@@ -1410,10 +1371,9 @@ function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
                       <input
                         type="number"
                         min={0}
-                        max={100}
                         step={0.5}
                         value={pctValue || ""}
-                        onChange={(e) => setAllocBalanced(group.key, srv.sid, parseFloat(e.target.value) || 0)}
+                        onChange={(e) => setAlloc(group.key, srv.sid, parseFloat(e.target.value) || 0)}
                         className="w-16 rounded-md border border-gray-300 px-2 py-1 text-right text-sm tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
                       <span className="text-xs text-gray-400">%</span>
