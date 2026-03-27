@@ -48,7 +48,7 @@ const adminSections: NavSection[] = [
       { label: "Alumnos", href: "/admin/alumnos", icon: <Users size={20} /> },
       { label: "Cohortes", href: "/admin/cohortes", icon: <FolderKanban size={20} /> },
       { label: "Cerebro FR", href: "/admin/cerebro-fr", icon: <Brain size={20} /> },
-      { label: "PodiumMetrics", href: "/admin/metricas", icon: <BarChart3 size={20} /> },
+      { label: "Cuadro de Mandos", href: "/admin/metricas", icon: <BarChart3 size={20} /> },
       { label: "Mentorías", href: "/admin/mentorias", icon: <Calendar size={20} /> },
       { label: "Mensajes", href: "/admin/mensajes", icon: <Mail size={20} />, badgeId: "unread-messages" },
       { label: "Accesos", href: "/admin/accesos", icon: <KeyRound size={20} /> },
@@ -101,7 +101,7 @@ function buildAlumnoSections(activeProgram: string | null): NavSection[] {
   sections.push({
     title: "Métricas de mi clínica",
     items: [
-      { label: "Mis KPIs", href: "/alumno/metricas", icon: <BarChart3 size={20} /> },
+      { label: "Mi Cuadro de Mandos", href: "/alumno/metricas", icon: <BarChart3 size={20} /> },
     ],
   });
 

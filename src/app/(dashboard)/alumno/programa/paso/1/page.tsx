@@ -18,6 +18,10 @@ import {
   Zap,
   ArrowRight,
   Info,
+  ChevronDown,
+  Lock,
+  AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
 
 // ══════════════════════════════════════════════════════════════
@@ -85,7 +89,7 @@ type Sala = {
   servNombre: string;
   sesHora: number;
   horasDia: number;
-  ticket: number;
+  ticket: number; // ticket medio DESEADO
 };
 
 // ─── Sistema 5 pasos ────────────────────────────────────────
@@ -95,7 +99,16 @@ type SistemaData = {
   facAnoAnterior: number;
   objFac: number;
   palancas: string[];
+  palancaDetalles: Record<string, PalancaDetalle>;
   forecast: number[];  // 12 monthly forecast
+  forecastSesiones: number[]; // 12 monthly session forecast
+};
+
+type PalancaDetalle = {
+  enfoque: string; // description of focus
+  ticketObjetivo?: number;
+  sesionesExtra?: number;
+  pacientesNuevos?: number;
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -127,17 +140,18 @@ const DEFAULT_EJ2: Ej2Data = {
 
 const DEFAULT_SISTEMA: SistemaData = {
   sueldo: 0, margen: 25, facAnoAnterior: 0, objFac: 0,
-  palancas: [], forecast: EMPTY_12(),
+  palancas: [], palancaDetalles: {},
+  forecast: EMPTY_12(), forecastSesiones: EMPTY_12(),
 };
 
 const PALANCAS_OPTIONS = [
-  { key: "precio", label: "Subida de precios", icon: "💰" },
-  { key: "recurrencia", label: "Recurrencia (más sesiones/paciente)", icon: "🔄" },
-  { key: "captacion", label: "Captación de nuevos pacientes", icon: "🎯" },
-  { key: "retencion", label: "Reducir churn / fidelizar", icon: "🤝" },
-  { key: "ocupacion", label: "Mejorar ocupación", icon: "📈" },
-  { key: "servicios", label: "Nuevos servicios", icon: "✨" },
-  { key: "costes", label: "Reducción de costes", icon: "✂️" },
+  { key: "precio", label: "Subida de precios", icon: "💰", desc: "Incrementar el ticket medio de tus servicios actuales" },
+  { key: "recurrencia", label: "Recurrencia (más sesiones/paciente)", icon: "🔄", desc: "Conseguir que cada paciente venga más veces" },
+  { key: "captacion", label: "Captación de nuevos pacientes", icon: "🎯", desc: "Atraer nuevos pacientes a la clínica" },
+  { key: "retencion", label: "Reducir churn / fidelizar", icon: "🤝", desc: "Retener más pacientes y reducir bajas" },
+  { key: "ocupacion", label: "Mejorar ocupación", icon: "📈", desc: "Llenar más huecos en la agenda" },
+  { key: "servicios", label: "Nuevos servicios", icon: "✨", desc: "Lanzar servicios nuevos o complementarios" },
+  { key: "costes", label: "Reducción de costes", icon: "✂️", desc: "Optimizar gastos para mejorar el margen" },
 ];
 
 // ══════════════════════════════════════════════════════════════
@@ -150,6 +164,19 @@ const fmt = (n: number) =>
 const sum = (arr: number[]) => arr.reduce((a, b) => a + (Number(b) || 0), 0);
 
 const pct = (a: number, b: number) => (b ? ((a / b) * 100).toFixed(1) + "%" : "—");
+
+// ── Phase completion checks ─────────────────────────────────
+function isEj1Complete(ej1: Ej1Data): boolean {
+  const hasFac = sum(ej1.aFac) > 0;
+  const hasSes = sum(ej1.aSes) > 0;
+  const hasSrvs = ej1.srvs.length > 0 && ej1.srvs.every((s) => s.name.trim() !== "");
+  const hasGastos = ej1.gastos.some((g) => g.valor > 0);
+  return hasFac && hasSes && hasSrvs && hasGastos;
+}
+
+function isEj2Complete(ej2: Ej2Data): boolean {
+  return ej2.salas.length > 0 && ej2.salas.every((s) => s.ticket > 0 && s.sesHora > 0);
+}
 
 // ══════════════════════════════════════════════════════════════
 // MAIN PAGE
@@ -175,6 +202,17 @@ export default function DiagnosticoPage() {
 
   const year = new Date().getFullYear();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Phase unlock logic
+  const ej1Done = isEj1Complete(ej1);
+  const ej2Done = isEj2Complete(ej2);
+
+  const isPhaseUnlocked = (key: Phase): boolean => {
+    if (key === "ej1") return true;
+    if (key === "ej2") return ej1Done;
+    if (key === "sistema") return ej1Done && ej2Done;
+    return false;
+  };
 
   // ── Load data ─────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -260,6 +298,15 @@ export default function DiagnosticoPage() {
 
   const phaseIdx = PHASES.findIndex((p) => p.key === phase);
 
+  const trySetPhase = (key: Phase) => {
+    if (isPhaseUnlocked(key)) setPhase(key);
+  };
+
+  const goNext = () => {
+    const nextPhase = PHASES[phaseIdx + 1]?.key;
+    if (nextPhase && isPhaseUnlocked(nextPhase)) setPhase(nextPhase);
+  };
+
   return (
     <div className="mx-auto max-w-6xl">
       {/* Header */}
@@ -281,38 +328,51 @@ export default function DiagnosticoPage() {
         </button>
       </div>
 
-      {/* Phase navigation */}
+      {/* Phase navigation with lock */}
       <div className="mb-6 flex gap-2 rounded-xl border border-gray-200 bg-white p-1.5">
-        {PHASES.map((p, i) => (
-          <button
-            key={p.key}
-            onClick={() => setPhase(p.key)}
-            className={`flex flex-1 items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
-              phase === p.key
-                ? "bg-blue-50 text-blue-700 shadow-sm"
-                : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-            }`}
-          >
-            <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-              phase === p.key ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-500"
-            }`}>{i + 1}</span>
-            <div className="text-left">
-              <div>{p.label}</div>
-              <div className="text-xs font-normal opacity-60">{p.desc}</div>
-            </div>
-          </button>
-        ))}
+        {PHASES.map((p, i) => {
+          const unlocked = isPhaseUnlocked(p.key);
+          const isCurrent = phase === p.key;
+          return (
+            <button
+              key={p.key}
+              onClick={() => trySetPhase(p.key)}
+              disabled={!unlocked}
+              className={`flex flex-1 items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
+                isCurrent
+                  ? "bg-blue-50 text-blue-700 shadow-sm"
+                  : unlocked
+                    ? "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                    : "cursor-not-allowed text-gray-300"
+              }`}
+            >
+              <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                isCurrent ? "bg-blue-600 text-white"
+                  : unlocked ? "bg-gray-100 text-gray-500"
+                    : "bg-gray-100 text-gray-300"
+              }`}>
+                {unlocked ? i + 1 : <Lock size={12} />}
+              </span>
+              <div className="text-left">
+                <div>{p.label}</div>
+                <div className="text-xs font-normal opacity-60">
+                  {unlocked ? p.desc : "Completa el ejercicio anterior"}
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* Content */}
       {phase === "ej1" && <Ejercicio1 data={ej1} update={updateEj1} />}
-      {phase === "ej2" && <Ejercicio2 data={ej2} update={updateEj2} servicios={ej1.srvs} />}
+      {phase === "ej2" && <Ejercicio2 data={ej2} update={updateEj2} servicios={ej1.srvs} ej1={ej1} />}
       {phase === "sistema" && <Sistema5Pasos data={sistema} update={updateSistema} ej1={ej1} ej2={ej2} />}
 
       {/* Prev / Next */}
       <div className="mt-8 flex justify-between">
         <button
-          onClick={() => setPhase(PHASES[phaseIdx - 1]?.key ?? phase)}
+          onClick={() => trySetPhase(PHASES[phaseIdx - 1]?.key ?? phase)}
           disabled={phaseIdx === 0}
           className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-30"
         >
@@ -320,10 +380,21 @@ export default function DiagnosticoPage() {
         </button>
         {phaseIdx < PHASES.length - 1 ? (
           <button
-            onClick={() => setPhase(PHASES[phaseIdx + 1].key)}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+            onClick={goNext}
+            disabled={!isPhaseUnlocked(PHASES[phaseIdx + 1]?.key)}
+            className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium ${
+              isPhaseUnlocked(PHASES[phaseIdx + 1]?.key)
+                ? "bg-blue-600 text-white hover:bg-blue-700"
+                : "bg-gray-200 text-gray-400 cursor-not-allowed"
+            }`}
           >
-            Siguiente <ChevronRight size={16} />
+            {isPhaseUnlocked(PHASES[phaseIdx + 1]?.key) ? (
+              <>Siguiente <ChevronRight size={16} /></>
+            ) : (
+              <>
+                <Lock size={14} /> Completa este ejercicio para continuar
+              </>
+            )}
           </button>
         ) : (
           <button
@@ -359,6 +430,7 @@ function NumInput({
   prefix,
   className,
   min,
+  disabled,
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -366,6 +438,7 @@ function NumInput({
   prefix?: string;
   className?: string;
   min?: number;
+  disabled?: boolean;
 }) {
   return (
     <div className="relative">
@@ -376,7 +449,8 @@ function NumInput({
         onChange={(e) => onChange(Number(e.target.value) || 0)}
         placeholder={placeholder || "0"}
         min={min}
-        className={`block w-full rounded-md border border-gray-300 py-1.5 text-right text-sm tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+        disabled={disabled}
+        className={`block w-full rounded-md border border-gray-300 py-1.5 text-right text-sm tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-500 ${
           prefix ? "pl-6 pr-2" : "px-2"
         } ${className || ""}`}
       />
@@ -393,12 +467,99 @@ function InfoBox({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ── Collapsible instructions component ──────────────────────
+function InstructionDropdown({
+  title,
+  intro,
+  steps,
+  videoUrl,
+  videoLabel,
+  color = "blue",
+}: {
+  title: string;
+  intro: string;
+  steps?: string[];
+  videoUrl?: string;
+  videoLabel?: string;
+  color?: "blue" | "green";
+}) {
+  const [open, setOpen] = useState(false);
+  const colors = color === "green"
+    ? { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", icon: "text-green-500", badge: "bg-green-100 text-green-600" }
+    : { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", icon: "text-blue-500", badge: "bg-blue-100 text-blue-600" };
+
+  return (
+    <div className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={`flex w-full items-center gap-2 px-4 py-3 text-sm font-medium ${colors.text} hover:opacity-80 transition`}
+      >
+        <Info size={16} className={`shrink-0 ${colors.icon}`} />
+        <span className="flex-1 text-left">{title}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className={`px-4 pb-4 text-sm ${colors.text} space-y-2 border-t ${colors.border}`}>
+          <p className="pt-3">{intro}</p>
+          {steps && steps.length > 0 && (
+            <ol className="ml-4 list-decimal space-y-1">
+              {steps.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ol>
+          )}
+          {videoUrl && (
+            <a
+              href={videoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`mt-2 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium ${colors.badge} hover:opacity-80`}
+            >
+              <ExternalLink size={12} />
+              {videoLabel || "Ver vídeo tutorial"}
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Auto-calculated field display ───────────────────────────
+function AutoField({ label, value, sublabel }: { label: string; value: string; sublabel?: string }) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>
+      <div className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 tabular-nums">
+        {value}
+      </div>
+      {sublabel && <p className="mt-1 text-xs text-gray-400">{sublabel}</p>}
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════
 // EJERCICIO 1 — RADIOGRAFÍA ACTUAL
 // ══════════════════════════════════════════════════════════════
 
 function Ejercicio1({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) => Ej1Data) => void }) {
   const [section, setSection] = useState<"A" | "B" | "C" | "D">("A");
+
+  // Section completion checks for sub-locking
+  const sectionADone = sum(data.aFac) > 0 && sum(data.aSes) > 0;
+  const sectionBDone = data.srvs.length > 0 && data.srvs.every((s) => s.name.trim() !== "" && sum(s.facM) > 0);
+  const sectionCDone = data.wrks.length > 0 && data.wrks.every((w) => w.name.trim() !== "");
+
+  const isSectionUnlocked = (key: string): boolean => {
+    if (key === "A") return true;
+    if (key === "B") return sectionADone;
+    if (key === "C") return sectionADone && sectionBDone;
+    if (key === "D") return sectionADone && sectionBDone && sectionCDone;
+    return false;
+  };
 
   const SECTIONS = [
     { key: "A" as const, label: "KPIs globales", icon: <BarChart3 size={14} /> },
@@ -409,24 +570,38 @@ function Ejercicio1({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data)
 
   return (
     <div className="space-y-4">
-      <InfoBox>
-        Introduce los datos del <strong>año anterior</strong> de tu clínica. Estos datos son la base de tu diagnóstico.
-        Si no tienes un dato exacto, pon tu mejor estimación.
-      </InfoBox>
+      <InstructionDropdown
+        title="Instrucciones: Radiografía actual"
+        intro="En este ejercicio vas a recoger los datos del año anterior de tu clínica. Estos datos son la base de todo tu diagnóstico y plan de acción posterior. Cuanto más precisos sean, mejor será tu estrategia."
+        steps={[
+          "Empieza por los KPIs globales: facturación, sesiones y pacientes nuevos mes a mes.",
+          "Después define los servicios que ofreces con su facturación y sesiones mensuales. El ticket medio se calcula automáticamente.",
+          "Añade a tu equipo de profesionales y sus servicios asignados.",
+          "Finalmente revisa la cuenta de resultados con todos los gastos operativos.",
+        ]}
+      />
 
       {/* Sub-section nav */}
       <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.key}
-            onClick={() => setSection(s.key)}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition ${
-              section === s.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {s.icon} {s.label}
-          </button>
-        ))}
+        {SECTIONS.map((s) => {
+          const unlocked = isSectionUnlocked(s.key);
+          return (
+            <button
+              key={s.key}
+              onClick={() => unlocked && setSection(s.key)}
+              disabled={!unlocked}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition ${
+                section === s.key
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : unlocked
+                    ? "text-gray-500 hover:text-gray-700"
+                    : "text-gray-300 cursor-not-allowed"
+              }`}
+            >
+              {unlocked ? s.icon : <Lock size={10} />} {s.label}
+            </button>
+          );
+        })}
       </div>
 
       {section === "A" && <SeccionA data={data} update={update} />}
@@ -450,6 +625,18 @@ function SeccionA({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
 
   return (
     <div className="space-y-6">
+      <InstructionDropdown
+        color="green"
+        title="Instrucciones de este paso"
+        intro="Introduce los datos mensuales del año anterior. Si no tienes un dato exacto, pon tu mejor estimación. Estos datos nos darán el ticket medio global y las tendencias estacionales de tu clínica."
+        steps={[
+          "Rellena la facturación mensual sin IVA.",
+          "Añade las sesiones realizadas cada mes.",
+          "Indica los pacientes nuevos por mes.",
+          "Completa los KPIs anuales: pacientes activos, bajas y NPS.",
+        ]}
+      />
+
       <Card title="Facturación mensual" subtitle="Facturación total por mes (sin IVA)">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -543,7 +730,7 @@ function SeccionA({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
         {data.gPac > 0 && (
           <div className="mt-4 flex gap-4 rounded-lg bg-gray-50 px-4 py-3 text-sm">
             <span>Tasa de churn: <strong>{pct(data.gChurn, data.gPac)}</strong></span>
-            <span>Ticket medio: <strong>{sum(data.aFac) > 0 && sum(data.aSes) > 0 ? fmt(sum(data.aFac) / sum(data.aSes)) : "—"}</strong></span>
+            <span>Ticket medio global: <strong>{sum(data.aFac) > 0 && sum(data.aSes) > 0 ? fmt(sum(data.aFac) / sum(data.aSes)) : "—"}</strong></span>
             <span>Facturación/paciente: <strong>{fmt(sum(data.aFac) / data.gPac)}</strong></span>
           </div>
         )}
@@ -586,92 +773,116 @@ function SeccionB({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
 
   return (
     <div className="space-y-6">
-      <InfoBox>
-        Define los servicios que ofrece tu clínica y sus datos mensuales. Se heredan al Ejercicio 2 automáticamente.
-      </InfoBox>
+      <InstructionDropdown
+        color="green"
+        title="Instrucciones de este paso"
+        intro="Define cada servicio que ofrece tu clínica con sus datos mensuales. El ticket medio de cada servicio se calcula automáticamente dividiendo la facturación total entre las sesiones totales. Estos datos se heredarán al Ejercicio 2 (Capacidad instalada)."
+        steps={[
+          "Añade un servicio con el botón inferior.",
+          "Indica el nombre, duración y precio de referencia.",
+          "Rellena la facturación y sesiones mensuales. El ticket medio se calcula solo.",
+          "Repite para cada servicio que ofreces.",
+        ]}
+      />
 
-      {data.srvs.map((srv) => (
-        <Card key={srv.sid} title={srv.name || `Servicio ${srv.sid}`}>
-          <div className="mb-4 grid gap-3 sm:grid-cols-4">
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-gray-600">Nombre del servicio</label>
-              <input
-                type="text"
-                value={srv.name}
-                onChange={(e) => updateSrv(srv.sid, (s) => ({ ...s, name: e.target.value }))}
-                placeholder="Ej: Fisioterapia manual"
-                className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Duración (min)</label>
-              <NumInput value={srv.mins} onChange={(v) => updateSrv(srv.sid, (s) => ({ ...s, mins: v }))} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Precio medio</label>
-              <NumInput value={srv.precio} onChange={(v) => updateSrv(srv.sid, (s) => ({ ...s, precio: v }))} prefix="€" />
-            </div>
-          </div>
+      {data.srvs.map((srv) => {
+        const totalFac = sum(srv.facM);
+        const totalSes = sum(srv.sesM);
+        const ticketMedioAuto = totalSes > 0 ? totalFac / totalSes : 0;
 
-          {/* Monthly billing */}
-          <p className="mb-2 text-xs font-medium text-gray-500">Facturación mensual</p>
-          <div className="mb-3 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  {MONTHS.map((m) => <th key={m} className="px-0.5 pb-1 text-center text-xs text-gray-400">{m}</th>)}
-                  <th className="px-1 pb-1 text-center text-xs font-semibold text-gray-600">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  {srv.facM.map((v, i) => (
-                    <td key={i} className="px-0.5">
-                      <NumInput value={v} onChange={(val) => setSrvMonth(srv.sid, "facM", i, val)} className="text-xs" />
-                    </td>
-                  ))}
-                  <td className="px-1 text-center text-xs font-semibold">{fmt(sum(srv.facM))}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* Monthly sessions */}
-          <p className="mb-2 text-xs font-medium text-gray-500">Sesiones mensuales</p>
-          <div className="mb-3 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  {MONTHS.map((m) => <th key={m} className="px-0.5 pb-1 text-center text-xs text-gray-400">{m}</th>)}
-                  <th className="px-1 pb-1 text-center text-xs font-semibold text-gray-600">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  {srv.sesM.map((v, i) => (
-                    <td key={i} className="px-0.5">
-                      <NumInput value={v} onChange={(val) => setSrvMonth(srv.sid, "sesM", i, val)} className="text-xs" />
-                    </td>
-                  ))}
-                  <td className="px-1 text-center text-xs font-semibold">{sum(srv.sesM).toLocaleString("es-ES")}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="mr-2 text-xs font-medium text-gray-600">Pacientes distintos:</label>
-              <NumInput value={srv.pac} onChange={(v) => updateSrv(srv.sid, (s) => ({ ...s, pac: v }))} className="inline-block w-20" />
+        return (
+          <Card key={srv.sid} title={srv.name || `Servicio ${srv.sid}`}>
+            <div className="mb-4 grid gap-3 sm:grid-cols-4">
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-gray-600">Nombre del servicio</label>
+                <input
+                  type="text"
+                  value={srv.name}
+                  onChange={(e) => updateSrv(srv.sid, (s) => ({ ...s, name: e.target.value }))}
+                  placeholder="Ej: Fisioterapia manual"
+                  className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Duración (min)</label>
+                <NumInput value={srv.mins} onChange={(v) => updateSrv(srv.sid, (s) => ({ ...s, mins: v }))} />
+              </div>
+              <div>
+                <AutoField
+                  label="Ticket medio"
+                  value={ticketMedioAuto > 0 ? fmt(ticketMedioAuto) : "—"}
+                  sublabel="Facturación / Sesiones"
+                />
+              </div>
             </div>
-            {data.srvs.length > 1 && (
-              <button onClick={() => removeService(srv.sid)} className="text-xs text-red-500 hover:text-red-700">
-                <Trash2 size={14} className="inline" /> Eliminar
-              </button>
-            )}
-          </div>
-        </Card>
-      ))}
+
+            {/* Monthly billing */}
+            <p className="mb-2 text-xs font-medium text-gray-500">Facturación mensual</p>
+            <div className="mb-3 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr>
+                    {MONTHS.map((m) => <th key={m} className="px-0.5 pb-1 text-center text-xs text-gray-400">{m}</th>)}
+                    <th className="px-1 pb-1 text-center text-xs font-semibold text-gray-600">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    {srv.facM.map((v, i) => (
+                      <td key={i} className="px-0.5">
+                        <NumInput value={v} onChange={(val) => setSrvMonth(srv.sid, "facM", i, val)} className="text-xs" />
+                      </td>
+                    ))}
+                    <td className="px-1 text-center text-xs font-semibold">{fmt(totalFac)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Monthly sessions */}
+            <p className="mb-2 text-xs font-medium text-gray-500">Sesiones mensuales</p>
+            <div className="mb-3 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr>
+                    {MONTHS.map((m) => <th key={m} className="px-0.5 pb-1 text-center text-xs text-gray-400">{m}</th>)}
+                    <th className="px-1 pb-1 text-center text-xs font-semibold text-gray-600">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    {srv.sesM.map((v, i) => (
+                      <td key={i} className="px-0.5">
+                        <NumInput value={v} onChange={(val) => setSrvMonth(srv.sid, "sesM", i, val)} className="text-xs" />
+                      </td>
+                    ))}
+                    <td className="px-1 text-center text-xs font-semibold">{totalSes.toLocaleString("es-ES")}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Ticket medio auto + pacientes */}
+            <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+              <div className="flex items-center gap-6">
+                <div>
+                  <span className="text-xs font-medium text-gray-500">Ticket medio auto: </span>
+                  <span className="text-sm font-bold text-blue-700">{ticketMedioAuto > 0 ? fmt(ticketMedioAuto) : "—"}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-gray-600">Pacientes distintos:</label>
+                  <NumInput value={srv.pac} onChange={(v) => updateSrv(srv.sid, (s) => ({ ...s, pac: v }))} className="inline-block w-20" />
+                </div>
+              </div>
+              {data.srvs.length > 1 && (
+                <button onClick={() => removeService(srv.sid)} className="text-xs text-red-500 hover:text-red-700">
+                  <Trash2 size={14} className="inline" /> Eliminar
+                </button>
+              )}
+            </div>
+          </Card>
+        );
+      })}
 
       <button onClick={addService} className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 py-4 text-sm font-medium text-gray-500 hover:border-blue-400 hover:text-blue-600">
         <Plus size={16} /> Añadir servicio
@@ -706,9 +917,17 @@ function SeccionC({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
 
   return (
     <div className="space-y-6">
-      <InfoBox>
-        Define a cada profesional de tu equipo. La jornada (%) indica el porcentaje de la jornada completa que trabaja.
-      </InfoBox>
+      <InstructionDropdown
+        color="green"
+        title="Instrucciones de este paso"
+        intro="Define a cada profesional de tu equipo. La jornada (%) indica el porcentaje de la jornada completa que trabaja. Asigna los servicios que realiza cada uno."
+        steps={[
+          "Añade un profesional con el botón inferior.",
+          "Indica nombre, tipo, horas/año convenio y % de jornada.",
+          "Selecciona los servicios que realiza (deben estar creados en la sección anterior).",
+          "Marca las semanas de vacaciones por mes.",
+        ]}
+      />
 
       {data.wrks.map((wrk) => (
         <Card key={wrk.wid} title={wrk.name || `Profesional ${wrk.wid}`}>
@@ -851,18 +1070,16 @@ function SeccionD({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
 
   return (
     <div className="space-y-6">
-      <InfoBox>
-        Aquí defines los ingresos adicionales y los gastos operativos para calcular el beneficio y margen de tu clínica.
-      </InfoBox>
+      <InstructionDropdown
+        color="green"
+        title="Instrucciones de este paso"
+        intro="Aquí defines los ingresos adicionales y los gastos operativos para calcular el beneficio y margen de tu clínica. Esta información es fundamental para fijar tu objetivo de facturación."
+      />
 
       {/* Revenue summary */}
       <Card title="Ingresos">
         <div className="grid gap-4 sm:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Facturación por servicios</label>
-            <div className="rounded-md bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700">{fmt(sum(data.aFac))}</div>
-            <p className="mt-1 text-xs text-gray-400">Viene de la sección A</p>
-          </div>
+          <AutoField label="Facturación por servicios" value={fmt(sum(data.aFac))} sublabel="Viene de la sección A" />
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Otros ingresos</label>
             <NumInput
@@ -872,10 +1089,7 @@ function SeccionD({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
             />
             <p className="mt-1 text-xs text-gray-400">Formación, productos, etc.</p>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Total ingresos</label>
-            <div className="rounded-md bg-green-50 px-3 py-2 text-sm font-bold text-green-700">{fmt(totalIngresos)}</div>
-          </div>
+          <AutoField label="Total ingresos" value={fmt(totalIngresos)} />
         </div>
       </Card>
 
@@ -978,10 +1192,12 @@ function Ejercicio2({
   data,
   update,
   servicios,
+  ej1,
 }: {
   data: Ej2Data;
   update: (fn: (p: Ej2Data) => Ej2Data) => void;
   servicios: Servicio[];
+  ej1: Ej1Data;
 }) {
   const addSala = () => {
     update((prev) => ({
@@ -1007,18 +1223,28 @@ function Ejercicio2({
   const totalSesAno = data.salas.reduce((acc, s) => acc + sesAno(s), 0);
   const totalFacMax = data.salas.reduce((acc, s) => acc + facAno(s), 0);
 
-  const scenarios = [
-    { pct: 100, label: "100% ocupación" },
-    { pct: 80, label: "80% ocupación" },
-    { pct: 60, label: "60% ocupación" },
-    { pct: 30, label: "30% ocupación" },
-  ];
+  // Facturación real del año anterior
+  const facAnterior = sum(ej1.aFac);
+  const ocupacionActual = totalFacMax > 0 ? (facAnterior / totalFacMax) * 100 : 0;
 
   return (
     <div className="space-y-6">
-      <InfoBox>
-        Define las salas/espacios de tu clínica y su capacidad. El sistema calcula automáticamente los escenarios de ocupación.
-      </InfoBox>
+      <InstructionDropdown
+        title="Instrucciones: Capacidad instalada"
+        intro="En este ejercicio vas a definir las salas y espacios de tu clínica y su capacidad máxima. Es clave que fijes un ticket medio DESEADO para cada sala/servicio, ya que este dato alimentará el cálculo del forecast y los objetivos que te marques."
+        steps={[
+          "Configura los días laborables y semanas al año.",
+          "Añade cada sala o espacio de tratamiento.",
+          "Asigna un servicio, sesiones/hora, horas/día y, muy importante, el ticket medio que QUIERES conseguir.",
+          "El sistema calculará automáticamente tu capacidad máxima y tu escenario óptimo (80% de ocupación).",
+        ]}
+      />
+
+      <InstructionDropdown
+        color="green"
+        title="Sobre el ticket medio deseado"
+        intro="El ticket medio que indiques aquí es el que TÚ quieres conseguir, no necesariamente el que tienes ahora. Este dato será fundamental para calcular el forecast y los KPIs objetivo. Si quieres subir precios, refleja aquí el precio objetivo."
+      />
 
       {/* Config */}
       <Card title="Configuración general">
@@ -1044,9 +1270,9 @@ function Ejercicio2({
                 <th className="pb-2 text-left text-xs font-medium text-gray-500">Servicio</th>
                 <th className="pb-2 text-center text-xs font-medium text-gray-500">Ses/hora</th>
                 <th className="pb-2 text-center text-xs font-medium text-gray-500">Horas/día</th>
-                <th className="pb-2 text-center text-xs font-medium text-gray-500">Ticket</th>
+                <th className="pb-2 text-center text-xs font-medium text-gray-500">Ticket deseado</th>
                 <th className="pb-2 text-right text-xs font-medium text-gray-500">Ses/año</th>
-                <th className="pb-2 text-right text-xs font-medium text-gray-500">Fac. máx/año</th>
+                <th className="pb-2 text-right text-xs font-medium text-gray-500">Fac. óptima/año</th>
                 <th className="pb-2 w-8"></th>
               </tr>
             </thead>
@@ -1147,28 +1373,51 @@ function Ejercicio2({
         </button>
       </Card>
 
-      {/* Scenarios */}
-      <Card title="Escenarios de ocupación">
-        <div className="grid gap-4 sm:grid-cols-4">
-          {scenarios.map((sc) => (
-            <div
-              key={sc.pct}
-              className={`rounded-lg border-2 p-4 text-center ${
-                sc.pct === 80 ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-gray-50"
-              }`}
-            >
-              <p className={`text-xs font-medium ${sc.pct === 80 ? "text-blue-600" : "text-gray-500"}`}>
-                {sc.label} {sc.pct === 80 && "⭐"}
-              </p>
-              <p className="mt-1 text-xl font-bold text-gray-900">
-                {fmt((totalFacMax * sc.pct) / 100)}
-              </p>
-              <p className="mt-1 text-xs text-gray-500">
-                {Math.round((totalSesAno * sc.pct) / 100).toLocaleString("es-ES")} sesiones
-              </p>
-            </div>
-          ))}
+      {/* Scenarios: Current vs Optimal only */}
+      <Card title="Tu situación vs. escenario óptimo">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Current state — blue */}
+          <div className="rounded-xl border-2 border-blue-300 bg-blue-50 p-5 text-center">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Tu estadio actual</p>
+            <p className="mt-2 text-2xl font-bold text-blue-800">{fmt(facAnterior)}</p>
+            <p className="mt-1 text-sm text-blue-600">
+              {ocupacionActual > 0 ? `${ocupacionActual.toFixed(1)}% de ocupación` : "Sin datos del año anterior"}
+            </p>
+            {sum(ej1.aSes) > 0 && (
+              <p className="mt-1 text-xs text-blue-500">{sum(ej1.aSes).toLocaleString("es-ES")} sesiones/año</p>
+            )}
+          </div>
+
+          {/* Optimal — green */}
+          <div className="rounded-xl border-2 border-green-300 bg-green-50 p-5 text-center">
+            <p className="text-xs font-semibold uppercase tracking-wide text-green-600">Escenario óptimo (80%)</p>
+            <p className="mt-2 text-2xl font-bold text-green-800">{fmt(totalFacMax * 0.8)}</p>
+            <p className="mt-1 text-sm text-green-600">80% de ocupación</p>
+            <p className="mt-1 text-xs text-green-500">{Math.round(totalSesAno * 0.8).toLocaleString("es-ES")} sesiones/año</p>
+          </div>
         </div>
+
+        {facAnterior > 0 && totalFacMax > 0 && (
+          <div className="mt-4">
+            {/* Progress bar */}
+            <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
+              <span>0%</span>
+              <span>Ocupación actual: <strong className="text-blue-700">{ocupacionActual.toFixed(1)}%</strong></span>
+              <span>100%</span>
+            </div>
+            <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200">
+              <div
+                className="h-full rounded-full bg-blue-500 transition-all"
+                style={{ width: `${Math.min(100, ocupacionActual)}%` }}
+              />
+            </div>
+            <div className="relative mt-1">
+              <div className="absolute left-[80%] -translate-x-1/2 text-xs font-medium text-green-600">
+                80% óptimo
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );
@@ -1198,6 +1447,18 @@ function Sistema5Pasos({
   const facMax = ej2.salas.reduce((acc, s) => acc + s.sesHora * s.horasDia * ej2.diasSem * ej2.semanasAno * s.ticket, 0);
   const brecha = data.objFac > 0 ? data.objFac - facAnterior : 0;
   const crecimientoPct = facAnterior > 0 ? ((data.objFac / facAnterior) - 1) * 100 : 0;
+  const ocupacionActual = facMax > 0 ? (facAnterior / facMax) * 100 : 0;
+
+  // Ticket medio ponderado from ej2 salas
+  const ticketMedioPonderado = (() => {
+    const totalSes = ej2.salas.reduce((acc, s) => acc + s.sesHora * s.horasDia * ej2.diasSem * ej2.semanasAno, 0);
+    if (totalSes === 0) return 0;
+    const totalFac = ej2.salas.reduce((acc, s) => {
+      const ses = s.sesHora * s.horasDia * ej2.diasSem * ej2.semanasAno;
+      return acc + ses * s.ticket;
+    }, 0);
+    return totalFac / totalSes;
+  })();
 
   // Calculate objFac from sueldo + margen
   const calcObj = () => {
@@ -1208,7 +1469,7 @@ function Sistema5Pasos({
     }
   };
 
-  // Generate forecast
+  // Generate forecast with session distribution
   const genForecast = () => {
     if (data.objFac <= 0) return;
     // Weight by previous year's monthly distribution, or equal
@@ -1216,7 +1477,23 @@ function Sistema5Pasos({
     const forecast = totalPrev > 0
       ? ej1.aFac.map((m) => Math.round((m / totalPrev) * data.objFac))
       : EMPTY_12().map(() => Math.round(data.objFac / 12));
-    update((p) => ({ ...p, forecast }));
+
+    // Also generate session forecast based on ticket medio deseado
+    const forecastSesiones = ticketMedioPonderado > 0
+      ? forecast.map((f) => Math.round(f / ticketMedioPonderado))
+      : EMPTY_12();
+
+    update((p) => ({ ...p, forecast, forecastSesiones }));
+  };
+
+  // Sub-step lock logic within Sistema
+  const isPasoUnlocked = (n: number): boolean => {
+    if (n === 1) return true;
+    if (n === 2) return true; // always visible (summary)
+    if (n === 3) return true; // can set objective anytime
+    if (n === 4) return data.objFac > 0;
+    if (n === 5) return data.objFac > 0 && data.palancas.length > 0;
+    return false;
   };
 
   const PASOS = [
@@ -1231,23 +1508,29 @@ function Sistema5Pasos({
     <div className="space-y-4">
       {/* Step indicators */}
       <div className="flex items-center gap-1 overflow-x-auto">
-        {PASOS.map((p, i) => (
-          <div key={p.n} className="flex items-center">
-            <button
-              onClick={() => setPaso(p.n)}
-              className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                paso === p.n
-                  ? "bg-blue-600 text-white"
-                  : paso > p.n
-                    ? "bg-green-100 text-green-700"
-                    : "bg-gray-100 text-gray-500"
-              }`}
-            >
-              {p.icon} {p.label}
-            </button>
-            {i < PASOS.length - 1 && <ArrowRight size={12} className="mx-1 text-gray-300" />}
-          </div>
-        ))}
+        {PASOS.map((p, i) => {
+          const unlocked = isPasoUnlocked(p.n);
+          return (
+            <div key={p.n} className="flex items-center">
+              <button
+                onClick={() => unlocked && setPaso(p.n)}
+                disabled={!unlocked}
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                  paso === p.n
+                    ? "bg-blue-600 text-white"
+                    : unlocked
+                      ? paso > p.n
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-100 text-gray-500"
+                      : "bg-gray-100 text-gray-300 cursor-not-allowed"
+                }`}
+              >
+                {unlocked ? p.icon : <Lock size={10} />} {p.label}
+              </button>
+              {i < PASOS.length - 1 && <ArrowRight size={12} className="mx-1 text-gray-300" />}
+            </div>
+          );
+        })}
       </div>
 
       {/* Paso 1: Resumen radiografía */}
@@ -1267,7 +1550,7 @@ function Sistema5Pasos({
               <p className="mt-1 text-xl font-bold text-green-800">{sum(ej1.aNew).toLocaleString("es-ES")}</p>
             </div>
             <div className="rounded-lg bg-amber-50 p-4">
-              <p className="text-xs text-amber-600">Ticket medio</p>
+              <p className="text-xs text-amber-600">Ticket medio actual</p>
               <p className="mt-1 text-xl font-bold text-amber-800">
                 {sum(ej1.aSes) > 0 ? fmt(facAnterior / sum(ej1.aSes)) : "—"}
               </p>
@@ -1284,24 +1567,24 @@ function Sistema5Pasos({
         </Card>
       )}
 
-      {/* Paso 2: Escenarios */}
+      {/* Paso 2: Escenarios — only current vs optimal */}
       {paso === 2 && (
-        <Card title="Resumen de capacidad y escenarios" subtitle="Datos del Ejercicio 2">
+        <Card title="Tu situación actual vs. escenario óptimo" subtitle="Datos del Ejercicio 2">
           <div className="mb-4 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-lg bg-blue-50 p-4">
-              <p className="text-xs text-blue-600">Capacidad máxima (100%)</p>
-              <p className="mt-1 text-xl font-bold text-blue-800">{fmt(facMax)}</p>
-              <p className="mt-1 text-xs text-blue-500">{totalSesAno.toLocaleString("es-ES")} sesiones/año</p>
+            <div className="rounded-xl border-2 border-blue-300 bg-blue-50 p-5 text-center">
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Tu estadio actual</p>
+              <p className="mt-2 text-2xl font-bold text-blue-800">{fmt(facAnterior)}</p>
+              <p className="mt-1 text-xs text-blue-500">{sum(ej1.aSes).toLocaleString("es-ES")} sesiones/año</p>
             </div>
-            <div className="rounded-lg bg-green-50 p-4">
-              <p className="text-xs text-green-600">Escenario óptimo (80%)</p>
-              <p className="mt-1 text-xl font-bold text-green-800">{fmt(facMax * 0.8)}</p>
+            <div className="rounded-xl border-2 border-green-300 bg-green-50 p-5 text-center">
+              <p className="text-xs font-semibold uppercase tracking-wide text-green-600">Escenario óptimo (80%)</p>
+              <p className="mt-2 text-2xl font-bold text-green-800">{fmt(facMax * 0.8)}</p>
               <p className="mt-1 text-xs text-green-500">{Math.round(totalSesAno * 0.8).toLocaleString("es-ES")} sesiones/año</p>
             </div>
           </div>
           {facAnterior > 0 && (
             <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
-              Ocupación actual estimada: <strong>{pct(facAnterior, facMax)}</strong> de la capacidad máxima
+              Ocupación actual estimada: <strong>{ocupacionActual.toFixed(1)}%</strong> de la capacidad máxima — el objetivo real que quieres alcanzar es el escenario óptimo (80%).
             </div>
           )}
         </Card>
@@ -1309,8 +1592,28 @@ function Sistema5Pasos({
 
       {/* Paso 3: Objetivo */}
       {paso === 3 && (
-        <Card title="Define tu objetivo de facturación" subtitle="¿Cuánto necesitas facturar para vivir como quieres?">
-          <div className="grid gap-4 sm:grid-cols-3">
+        <Card title="Define tu objetivo de facturación">
+          <InstructionDropdown
+            color="green"
+            title="Instrucciones: Define tu objetivo"
+            intro="¿Qué quieres que te deje tu negocio en beneficio? Piensa en: salario para ti + beneficio para la empresa y reinversión. El sistema calculará la facturación necesaria para conseguirlo."
+            steps={[
+              "Indica tu sueldo objetivo bruto anual. Recuerda que nuestra recomendación antes de tratar de crecer es que tú al menos saques una nómina con un coste empresa similar a la de un fisio, así que debes sumarlo.",
+              "Fija el margen objetivo (%) que quieres que tenga tu negocio después de gastos.",
+              "Pulsa 'Calcular objetivo' y el sistema te dirá cuánto necesitas facturar.",
+            ]}
+          />
+
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+              <p>
+                <strong>Recomendación:</strong> Antes de tratar de crecer, asegúrate de que tu sueldo objetivo incluya al menos una nómina equivalente al coste empresa de un fisioterapeuta. Si no llegas a eso, esa es tu primera prioridad.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Sueldo objetivo (bruto/año)</label>
               <NumInput value={data.sueldo} onChange={(v) => update((p) => ({ ...p, sueldo: v }))} prefix="€" />
@@ -1358,69 +1661,178 @@ function Sistema5Pasos({
 
       {/* Paso 4: Estrategia / Palancas */}
       {paso === 4 && (
-        <Card title="Selecciona tus palancas de crecimiento" subtitle="Elige 3-4 palancas principales para alcanzar tu objetivo">
-          {brecha > 0 && (
-            <div className="mb-4 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              Necesitas cubrir una brecha de <strong>{fmt(brecha)}</strong> ({crecimientoPct.toFixed(1)}% de crecimiento).
-            </div>
-          )}
+        <div className="space-y-4">
+          <InstructionDropdown
+            title="Instrucciones: Estrategia"
+            intro="Seleccionar estas vías de crecimiento va a ser clave, pero deben estar alineadas con todo el trabajo que has hecho hasta ahora. El sistema verificará que tu estrategia es coherente con tu radiografía, tu capacidad y tu objetivo."
+            steps={[
+              "Selecciona las 3-4 palancas principales que usarás para cerrar la brecha.",
+              "Para cada palanca seleccionada, concreta los detalles: ¿cuánto esperas de cada una?",
+              "Estos detalles alimentarán el forecast del siguiente paso.",
+            ]}
+          />
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {PALANCAS_OPTIONS.map((pal) => {
-              const active = data.palancas.includes(pal.key);
-              return (
-                <button
-                  key={pal.key}
-                  onClick={() =>
+          <Card title="Selecciona tus palancas de crecimiento" subtitle="Elige 3-4 palancas principales para alcanzar tu objetivo">
+            {brecha > 0 && (
+              <div className="mb-4 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                Necesitas cubrir una brecha de <strong>{fmt(brecha)}</strong> ({crecimientoPct.toFixed(1)}% de crecimiento).
+              </div>
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {PALANCAS_OPTIONS.map((pal) => {
+                const active = data.palancas.includes(pal.key);
+                return (
+                  <button
+                    key={pal.key}
+                    onClick={() =>
+                      update((prev) => ({
+                        ...prev,
+                        palancas: active
+                          ? prev.palancas.filter((p) => p !== pal.key)
+                          : [...prev.palancas, pal.key],
+                      }))
+                    }
+                    className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition ${
+                      active
+                        ? "border-blue-400 bg-blue-50 shadow-sm"
+                        : "border-gray-200 bg-white hover:border-gray-300"
+                    }`}
+                  >
+                    <span className="text-2xl">{pal.icon}</span>
+                    <div className="flex-1">
+                      <span className={`text-sm font-medium ${active ? "text-blue-700" : "text-gray-700"}`}>
+                        {pal.label}
+                      </span>
+                      <p className={`text-xs ${active ? "text-blue-500" : "text-gray-400"}`}>{pal.desc}</p>
+                    </div>
+                    {active && <Check size={16} className="ml-auto text-blue-600" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {data.palancas.length > 0 && (
+              <p className="mt-4 text-sm text-gray-500">
+                {data.palancas.length} palanca{data.palancas.length !== 1 ? "s" : ""} seleccionada{data.palancas.length !== 1 ? "s" : ""}
+              </p>
+            )}
+          </Card>
+
+          {/* Detail per selected palanca */}
+          {data.palancas.length > 0 && (
+            <Card title="Concreta tu estrategia" subtitle="Detalla cómo aplicarás cada palanca seleccionada">
+              <div className="space-y-4">
+                {data.palancas.map((key) => {
+                  const pal = PALANCAS_OPTIONS.find((p) => p.key === key)!;
+                  const detalle = data.palancaDetalles?.[key] || { enfoque: "" };
+                  const updateDetalle = (field: string, val: string | number) => {
                     update((prev) => ({
                       ...prev,
-                      palancas: active
-                        ? prev.palancas.filter((p) => p !== pal.key)
-                        : [...prev.palancas, pal.key],
-                    }))
-                  }
-                  className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition ${
-                    active
-                      ? "border-blue-400 bg-blue-50 shadow-sm"
-                      : "border-gray-200 bg-white hover:border-gray-300"
-                  }`}
-                >
-                  <span className="text-2xl">{pal.icon}</span>
-                  <span className={`text-sm font-medium ${active ? "text-blue-700" : "text-gray-700"}`}>
-                    {pal.label}
-                  </span>
-                  {active && <Check size={16} className="ml-auto text-blue-600" />}
-                </button>
-              );
-            })}
-          </div>
+                      palancaDetalles: {
+                        ...prev.palancaDetalles,
+                        [key]: { ...detalle, [field]: val },
+                      },
+                    }));
+                  };
+                  return (
+                    <div key={key} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                      <p className="mb-2 text-sm font-semibold text-gray-700">{pal.icon} {pal.label}</p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="sm:col-span-2">
+                          <label className="mb-1 block text-xs text-gray-500">¿Cómo lo vas a aplicar?</label>
+                          <textarea
+                            value={detalle.enfoque}
+                            onChange={(e) => updateDetalle("enfoque", e.target.value)}
+                            placeholder="Describe brevemente tu enfoque..."
+                            rows={2}
+                            className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                          />
+                        </div>
+                        {key === "precio" && (
+                          <div>
+                            <label className="mb-1 block text-xs text-gray-500">Ticket medio objetivo</label>
+                            <NumInput
+                              value={detalle.ticketObjetivo || 0}
+                              onChange={(v) => updateDetalle("ticketObjetivo", v)}
+                              prefix="€"
+                            />
+                          </div>
+                        )}
+                        {(key === "captacion") && (
+                          <div>
+                            <label className="mb-1 block text-xs text-gray-500">Pacientes nuevos/mes objetivo</label>
+                            <NumInput
+                              value={detalle.pacientesNuevos || 0}
+                              onChange={(v) => updateDetalle("pacientesNuevos", v)}
+                            />
+                          </div>
+                        )}
+                        {key === "recurrencia" && (
+                          <div>
+                            <label className="mb-1 block text-xs text-gray-500">Sesiones extra/paciente/año</label>
+                            <NumInput
+                              value={detalle.sesionesExtra || 0}
+                              onChange={(v) => updateDetalle("sesionesExtra", v)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
-          {data.palancas.length > 0 && (
-            <p className="mt-4 text-sm text-gray-500">
-              {data.palancas.length} palanca{data.palancas.length !== 1 ? "s" : ""} seleccionada{data.palancas.length !== 1 ? "s" : ""}
-            </p>
+              {/* Coherence check */}
+              {data.objFac > 0 && facMax > 0 && data.objFac > facMax * 0.95 && !data.palancas.includes("servicios") && !data.palancas.includes("ocupacion") && (
+                <div className="mt-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                  <p>
+                    Tu objetivo está cerca de tu capacidad máxima. Considera añadir "Nuevos servicios" o "Mejorar ocupación" como palancas, o revisa si necesitas ampliar capacidad.
+                  </p>
+                </div>
+              )}
+            </Card>
           )}
-        </Card>
+        </div>
       )}
 
       {/* Paso 5: Forecast */}
       {paso === 5 && (
         <div className="space-y-6">
-          <Card title="Forecast mensual de facturación" subtitle="Distribuye tu objetivo en los 12 meses">
-            {data.objFac > 0 && (
-              <button
-                onClick={genForecast}
-                className="mb-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                Generar forecast automático
-              </button>
-            )}
+          <InstructionDropdown
+            title="Instrucciones: KPIs y Forecast"
+            intro="Haciendo click en 'Generar forecast automático' el sistema te establecerá unos objetivos mensuales de facturación y sesiones basados en la estacionalidad del año anterior y el ticket medio deseado que definiste en Capacidad instalada."
+            steps={[
+              "Pulsa el botón para generar el forecast automáticamente.",
+              "El sistema distribuirá tu objetivo siguiendo la estacionalidad del año anterior.",
+              "Calculará las sesiones necesarias por mes usando tu ticket medio deseado.",
+              "Puedes ajustar manualmente cualquier mes si lo necesitas.",
+            ]}
+          />
+
+          <Card title="Forecast mensual" subtitle="Facturación y sesiones objetivo distribuidas en 12 meses">
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              {data.objFac > 0 && (
+                <button
+                  onClick={genForecast}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Generar forecast automático
+                </button>
+              )}
+              {ticketMedioPonderado > 0 && (
+                <span className="text-xs text-gray-500">
+                  Ticket medio deseado: <strong className="text-blue-700">{fmt(ticketMedioPonderado)}</strong> (de Capacidad instalada)
+                </span>
+              )}
+            </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    <th className="pb-2 text-left text-xs text-gray-500">Mes</th>
+                    <th className="pb-2 text-left text-xs text-gray-500 w-24">Concepto</th>
                     {MONTHS.map((m) => (
                       <th key={m} className="px-0.5 pb-2 text-center text-xs text-gray-500">{m}</th>
                     ))}
@@ -1428,15 +1840,17 @@ function Sistema5Pasos({
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Previous year billing */}
                   <tr>
-                    <td className="py-1 text-xs font-medium text-gray-500">Año ant.</td>
+                    <td className="py-1 text-xs font-medium text-gray-500">Fac. ant.</td>
                     {ej1.aFac.map((v, i) => (
                       <td key={i} className="px-0.5 text-center text-xs text-gray-400">{v > 0 ? fmt(v) : "—"}</td>
                     ))}
                     <td className="px-2 text-center text-xs font-semibold text-gray-500">{fmt(facAnterior)}</td>
                   </tr>
+                  {/* Forecast billing */}
                   <tr>
-                    <td className="py-1 text-xs font-medium text-blue-600">Objetivo</td>
+                    <td className="py-1 text-xs font-medium text-blue-600">Obj. fac.</td>
                     {data.forecast.map((v, i) => (
                       <td key={i} className="px-0.5">
                         <NumInput
@@ -1454,6 +1868,34 @@ function Sistema5Pasos({
                     ))}
                     <td className="px-2 text-center text-xs font-bold text-blue-700">{fmt(sum(data.forecast))}</td>
                   </tr>
+                  {/* Forecast sessions */}
+                  <tr>
+                    <td className="py-1 text-xs font-medium text-green-600">Obj. ses.</td>
+                    {(data.forecastSesiones || EMPTY_12()).map((v, i) => (
+                      <td key={i} className="px-0.5">
+                        <NumInput
+                          value={v}
+                          onChange={(val) =>
+                            update((prev) => {
+                              const fs = [...(prev.forecastSesiones || EMPTY_12())];
+                              fs[i] = val;
+                              return { ...prev, forecastSesiones: fs };
+                            })
+                          }
+                          className="text-xs"
+                        />
+                      </td>
+                    ))}
+                    <td className="px-2 text-center text-xs font-bold text-green-700">{sum(data.forecastSesiones || EMPTY_12()).toLocaleString("es-ES")}</td>
+                  </tr>
+                  {/* Previous year sessions */}
+                  <tr>
+                    <td className="py-1 text-xs font-medium text-gray-500">Ses. ant.</td>
+                    {ej1.aSes.map((v, i) => (
+                      <td key={i} className="px-0.5 text-center text-xs text-gray-400">{v > 0 ? v.toLocaleString("es-ES") : "—"}</td>
+                    ))}
+                    <td className="px-2 text-center text-xs font-semibold text-gray-500">{sum(ej1.aSes).toLocaleString("es-ES")}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -1468,25 +1910,76 @@ function Sistema5Pasos({
             )}
           </Card>
 
-          {/* Summary card */}
+          {/* KPI summary — captación, recurrencia, etc */}
+          {sum(data.forecast) > 0 && (
+            <Card title="Cuadro de mandos objetivo">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg bg-blue-50 p-4 text-center">
+                  <p className="text-xs font-medium text-blue-600">Facturación objetivo</p>
+                  <p className="mt-1 text-xl font-bold text-blue-800">{fmt(data.objFac)}</p>
+                  <p className="mt-1 text-xs text-blue-500">vs {fmt(facAnterior)} anterior</p>
+                </div>
+                <div className="rounded-lg bg-green-50 p-4 text-center">
+                  <p className="text-xs font-medium text-green-600">Sesiones objetivo</p>
+                  <p className="mt-1 text-xl font-bold text-green-800">{sum(data.forecastSesiones || EMPTY_12()).toLocaleString("es-ES")}</p>
+                  <p className="mt-1 text-xs text-green-500">vs {sum(ej1.aSes).toLocaleString("es-ES")} anterior</p>
+                </div>
+                <div className="rounded-lg bg-amber-50 p-4 text-center">
+                  <p className="text-xs font-medium text-amber-600">Ticket medio deseado</p>
+                  <p className="mt-1 text-xl font-bold text-amber-800">{ticketMedioPonderado > 0 ? fmt(ticketMedioPonderado) : "—"}</p>
+                  <p className="mt-1 text-xs text-amber-500">
+                    vs {sum(ej1.aSes) > 0 ? fmt(facAnterior / sum(ej1.aSes)) : "—"} actual
+                  </p>
+                </div>
+                <div className="rounded-lg bg-purple-50 p-4 text-center">
+                  <p className="text-xs font-medium text-purple-600">Crecimiento</p>
+                  <p className="mt-1 text-xl font-bold text-purple-800">{crecimientoPct.toFixed(1)}%</p>
+                  <p className="mt-1 text-xs text-purple-500">
+                    {data.palancas.length} palanca{data.palancas.length !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+
+              {/* Palancas summary */}
+              {data.palancas.length > 0 && (
+                <div className="mt-4 rounded-lg border border-gray-200 p-4">
+                  <p className="mb-2 text-sm font-semibold text-gray-700">Estrategia seleccionada</p>
+                  <div className="flex flex-wrap gap-2">
+                    {data.palancas.map((key) => {
+                      const pal = PALANCAS_OPTIONS.find((p) => p.key === key);
+                      return (
+                        <span key={key} className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
+                          {pal?.icon} {pal?.label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* Full summary card */}
           <Card title="Resumen del diagnóstico">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <h4 className="mb-2 text-sm font-semibold text-gray-700">Situación actual</h4>
-                <ul className="space-y-1 text-sm text-gray-600">
-                  <li>Facturación: <strong>{fmt(facAnterior)}</strong></li>
-                  <li>Sesiones: <strong>{sum(ej1.aSes).toLocaleString("es-ES")}</strong></li>
-                  <li>Servicios: <strong>{ej1.srvs.length}</strong> · Profesionales: <strong>{ej1.wrks.length}</strong></li>
-                  <li>Capacidad máx: <strong>{fmt(facMax)}</strong></li>
-                </ul>
+                <div className="space-y-1 text-sm text-gray-600">
+                  <p>Facturación: <strong>{fmt(facAnterior)}</strong></p>
+                  <p>Sesiones: <strong>{sum(ej1.aSes).toLocaleString("es-ES")}</strong></p>
+                  <p>Ticket medio: <strong>{sum(ej1.aSes) > 0 ? fmt(facAnterior / sum(ej1.aSes)) : "—"}</strong></p>
+                  <p>Servicios: <strong>{ej1.srvs.length}</strong> · Profesionales: <strong>{ej1.wrks.length}</strong></p>
+                  <p>Capacidad máx: <strong>{fmt(facMax)}</strong> · Ocupación: <strong>{ocupacionActual.toFixed(1)}%</strong></p>
+                </div>
               </div>
               <div>
                 <h4 className="mb-2 text-sm font-semibold text-gray-700">Objetivo y estrategia</h4>
-                <ul className="space-y-1 text-sm text-gray-600">
-                  <li>Objetivo: <strong>{fmt(data.objFac)}</strong> (+{crecimientoPct.toFixed(1)}%)</li>
-                  <li>Sueldo objetivo: <strong>{fmt(data.sueldo)}</strong></li>
-                  <li>Palancas: <strong>{data.palancas.length > 0 ? data.palancas.map((p) => PALANCAS_OPTIONS.find((o) => o.key === p)?.label).join(", ") : "Sin seleccionar"}</strong></li>
-                </ul>
+                <div className="space-y-1 text-sm text-gray-600">
+                  <p>Objetivo: <strong>{fmt(data.objFac)}</strong> (+{crecimientoPct.toFixed(1)}%)</p>
+                  <p>Sueldo objetivo: <strong>{fmt(data.sueldo)}</strong></p>
+                  <p>Ticket medio deseado: <strong>{ticketMedioPonderado > 0 ? fmt(ticketMedioPonderado) : "—"}</strong></p>
+                  <p>Palancas: <strong>{data.palancas.length > 0 ? data.palancas.map((p) => PALANCAS_OPTIONS.find((o) => o.key === p)?.label).join(", ") : "Sin seleccionar"}</strong></p>
+                </div>
               </div>
             </div>
           </Card>
@@ -1502,13 +1995,18 @@ function Sistema5Pasos({
         >
           <ChevronLeft size={14} /> Paso anterior
         </button>
-        {paso < 5 && (
+        {paso < 5 && isPasoUnlocked(paso + 1) && (
           <button
             onClick={() => setPaso((p) => Math.min(5, p + 1))}
             className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
           >
             Siguiente paso <ChevronRight size={14} />
           </button>
+        )}
+        {paso < 5 && !isPasoUnlocked(paso + 1) && (
+          <span className="flex items-center gap-1 text-sm text-gray-400">
+            <Lock size={12} /> Completa este paso para continuar
+          </span>
         )}
       </div>
     </div>
