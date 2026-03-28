@@ -77,15 +77,18 @@ function KpiCard({ label, value, prev, format = "currency", icon }: {
 }
 
 function MiniChart({ data, labels }: { data: number[]; labels: string[] }) {
-  const max = Math.max(...data, 1);
+  const max = Math.max(...data, 1); const min = Math.min(...data); const range = max - min || 1;
   return (
     <div className="flex items-end gap-1.5 h-20">
-      {data.map((v, i) => (
+      {data.map((v, i) => {
+        const pct = 20 + ((v - min) / range) * 80;
+        return (
         <div key={i} className="flex flex-col items-center gap-1 flex-1">
-          <div className="w-full rounded-t bg-blue-500 transition-all" style={{ height: `${(v / max) * 100}%`, minHeight: 2 }} />
+          <div className="w-full rounded-t bg-blue-500 transition-all" style={{ height: `${pct}%`, minHeight: 2 }} />
           <span className="text-[9px] text-gray-400">{labels[i]}</span>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -126,11 +129,12 @@ function DiagnosticoView({ scenario }: { scenario: Scenario }) {
           <p className="text-xs text-gray-500 mb-2">Facturación mensual</p>
           <div className="flex items-end gap-1 h-24">
             {ej1.aFac.map((v, i) => {
-              const max = Math.max(...ej1.aFac, 1);
+              const max = Math.max(...ej1.aFac, 1); const min = Math.min(...ej1.aFac); const range = max - min || 1;
+              const pct = 20 + ((v - min) / range) * 80; // min bar = 20%, max = 100%
               return (
                 <div key={i} className="flex flex-col items-center gap-1 flex-1">
                   <span className="text-[8px] text-gray-400">{fmt(v)}</span>
-                  <div className="w-full rounded-t bg-blue-500" style={{ height: `${(v / max) * 100}%`, minHeight: 2 }} />
+                  <div className="w-full rounded-t bg-blue-500" style={{ height: `${pct}%`, minHeight: 2 }} />
                   <span className="text-[9px] text-gray-400">{MONTHS[i]}</span>
                 </div>
               );
@@ -323,15 +327,15 @@ function DiagnosticoView({ scenario }: { scenario: Scenario }) {
         <div>
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Forecast mensual</p>
           <div className="flex items-end gap-1 h-20">
-            {sistema.forecast.map((v, i) => {
-              const max = Math.max(...sistema.forecast, 1);
+            {(() => { const fMax = Math.max(...sistema.forecast, 1); const fMin = Math.min(...sistema.forecast); const fRange = fMax - fMin || 1; return sistema.forecast.map((v, i) => {
+              const pct = 20 + ((v - fMin) / fRange) * 80;
               return (
                 <div key={i} className="flex flex-col items-center gap-1 flex-1">
-                  <div className="w-full rounded-t bg-emerald-500" style={{ height: `${(v / max) * 100}%`, minHeight: 2 }} />
+                  <div className="w-full rounded-t bg-emerald-500" style={{ height: `${pct}%`, minHeight: 2 }} />
                   <span className="text-[9px] text-gray-400">{MONTHS[i]}</span>
                 </div>
               );
-            })}
+            }); })()}
           </div>
           <div className="mt-2 flex justify-between text-xs text-gray-500">
             <span>Total forecast: {fmt(sumArr(sistema.forecast))}</span>
