@@ -19,13 +19,15 @@ import {
   GraduationCap,
   Eye,
   ArrowLeftRight,
+  Gamepad2,
+  ChevronDown,
   UserCircle,
   Lock,
   ClipboardCheck,
   KeyRound,
   CreditCard,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type NavItem = {
   label: string;
@@ -55,6 +57,14 @@ const adminSections: NavSection[] = [
       { label: "Facturación", href: "/admin/facturacion", icon: <CreditCard size={20} /> },
       { label: "Monitoring IA", href: "/admin/monitoring", icon: <Activity size={20} /> },
       { label: "Tareas", href: "/admin/tareas", icon: <ClipboardCheck size={20} /> },
+    ],
+  },
+];
+
+const playgroundSections: NavSection[] = [
+  {
+    items: [
+      { label: "Playground", href: "/admin/playground", icon: <Gamepad2 size={20} /> },
     ],
   },
 ];
@@ -155,12 +165,14 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
 
   // View mode: only available for SUPERADMIN
   const canSwitchView = role === "SUPERADMIN";
-  const [viewMode, setViewMode] = useState<"admin" | "alumno">("admin");
+  const [viewMode, setViewMode] = useState<"admin" | "alumno" | "playground">("admin");
 
   // Detect view mode from current path
   useEffect(() => {
     if (canSwitchView) {
-      if (pathname.startsWith("/alumno")) {
+      if (pathname.startsWith("/admin/playground")) {
+        setViewMode("playground");
+      } else if (pathname.startsWith("/alumno")) {
         setViewMode("alumno");
       } else {
         setViewMode("admin");
@@ -168,22 +180,22 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
     }
   }, [pathname, canSwitchView]);
 
-  const handleSwitchView = () => {
-    if (viewMode === "admin") {
-      setViewMode("alumno");
-      router.push("/alumno/programa");
-    } else {
-      setViewMode("admin");
-      router.push("/admin");
-    }
-  };
+  const viewModes = [
+    { key: "admin" as const, label: "Admin", href: "/admin" },
+    { key: "alumno" as const, label: "Alumno", href: "/alumno/programa" },
+    { key: "playground" as const, label: "Playground", href: "/admin/playground" },
+  ];
 
   // Determine which sections to show based on role + viewMode
   let activeSections: NavSection[];
   let activeRoleLabel: string;
   let activeRoleColor: string;
 
-  if (role === "SUPERADMIN" && viewMode === "alumno") {
+  if (role === "SUPERADMIN" && viewMode === "playground") {
+    activeSections = playgroundSections;
+    activeRoleLabel = "Playground";
+    activeRoleColor = "bg-orange-100 text-orange-700";
+  } else if (role === "SUPERADMIN" && viewMode === "alumno") {
     activeSections = buildAlumnoSections(activeProgram);
     activeRoleLabel = "Admin · Vista Alumno";
     activeRoleColor = "bg-amber-100 text-amber-700";
@@ -257,30 +269,46 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
             >
               {activeRoleLabel}
             </span>
-            {canSwitchView && (
-              <button
-                onClick={handleSwitchView}
-                className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                title={viewMode === "admin" ? "Cambiar a Vista Alumno" : "Cambiar a Vista Admin"}
-              >
-                <ArrowLeftRight size={14} />
-                <span>{viewMode === "admin" ? "Vista Alumno" : "Vista Admin"}</span>
-              </button>
-            )}
           </div>
+          {canSwitchView && (
+            <div className="mt-2 flex gap-1 rounded-lg bg-gray-100 p-0.5">
+              {viewModes.map((vm) => (
+                <button
+                  key={vm.key}
+                  onClick={() => { setViewMode(vm.key); router.push(vm.href); }}
+                  className={cn(
+                    "flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
+                    viewMode === vm.key
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  {vm.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* Collapsed view switcher */}
       {collapsed && canSwitchView && (
-        <div className="shrink-0 border-b border-gray-200 px-2 py-2">
-          <button
-            onClick={handleSwitchView}
-            className="flex w-full items-center justify-center rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-            title={viewMode === "admin" ? "Cambiar a Vista Alumno" : "Cambiar a Vista Admin"}
-          >
-            <Eye size={18} />
-          </button>
+        <div className="shrink-0 border-b border-gray-200 px-2 py-2 space-y-1">
+          {viewModes.map((vm) => (
+            <button
+              key={vm.key}
+              onClick={() => { setViewMode(vm.key); router.push(vm.href); }}
+              className={cn(
+                "flex w-full items-center justify-center rounded-md p-1.5 transition-colors",
+                viewMode === vm.key
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              )}
+              title={vm.label}
+            >
+              {vm.key === "admin" ? <LayoutDashboard size={16} /> : vm.key === "alumno" ? <Eye size={16} /> : <Gamepad2 size={16} />}
+            </button>
+          ))}
         </div>
       )}
 
