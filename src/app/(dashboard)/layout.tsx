@@ -2,6 +2,7 @@ import { requireAuth } from "@/lib/auth";
 import { getInitials } from "@/lib/utils";
 import { Sidebar } from "@/components/layout/sidebar";
 import { ConsentGate } from "@/components/legal/consent-gate";
+import { FloatingAssistant } from "@/components/widgets/floating-assistant";
 import Link from "next/link";
 
 export default async function DashboardLayout({
@@ -30,6 +31,9 @@ export default async function DashboardLayout({
           {children}
         </ConsentGate>
       </main>
+      {/* Floating AI assistant — only for students with active enrollment */}
+      {user.role === "STUDENT" && activeProgram && <FloatingAssistant />}
+
       {/* Legal footer */}
       <footer className="ml-64 border-t border-gray-200 bg-white px-6 py-4">
         <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-gray-500">
