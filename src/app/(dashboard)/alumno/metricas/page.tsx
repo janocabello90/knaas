@@ -223,11 +223,13 @@ export default function MetricasPage() {
   // Load snapshots and diag data
   useEffect(() => {
     const loadData = async () => {
+      let loadedSnapshots: KpiSnapshot[] = [];
       try {
         const res = await fetch("/api/alumno/metricas");
         if (!res.ok) throw new Error("Failed to fetch");
         const data = await res.json();
-        setSnapshots(data.snapshots || []);
+        loadedSnapshots = data.snapshots || [];
+        setSnapshots(loadedSnapshots);
       } catch (err) {
         console.error("Error loading metrics:", err);
       }
@@ -239,6 +241,20 @@ export default function MetricasPage() {
         setDiagData(data);
       } catch (err) {
         console.error("Error loading diagnostico:", err);
+      }
+
+      // Auto-populate form state from latest snapshot so Dashboard cards show data
+      if (loadedSnapshots.length > 0) {
+        const latest = loadedSnapshots[loadedSnapshots.length - 1];
+        setEditMonth(latest.monthYear);
+        setServiceData(latest.serviceData || {});
+        setWorkerData(latest.workerData || {});
+        setNewPatients(latest.newPatients);
+        setTotalPatients12m(latest.totalPatients12m);
+        setSingleVisitPat12m(latest.singleVisitPat12m);
+        setNps(latest.nps);
+        setUseManualExpenses(latest.useManualExpenses ?? false);
+        setMonthlyExpenses(latest.monthlyExpenses || {});
       }
     };
 
