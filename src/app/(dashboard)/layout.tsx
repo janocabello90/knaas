@@ -32,7 +32,7 @@ export default async function DashboardLayout({
         </ConsentGate>
       </main>
       {/* Floating AI assistant — only for students with active enrollment */}
-      {user.role === "STUDENT" && activeProgram && <FloatingAssistant />}
+      {user.role === "ALUMNO" && activeProgram && <FloatingAssistant />}
 
       {/* Legal footer */}
       <footer className="ml-64 border-t border-gray-200 bg-white px-6 py-4">
