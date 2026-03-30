@@ -22,6 +22,7 @@ import {
   Lock,
   AlertTriangle,
   ExternalLink,
+  Heart,
 } from "lucide-react";
 
 // ══════════════════════════════════════════════════════════════
@@ -49,6 +50,13 @@ type Ej1Data = {
   dIngOtros: number;
   // Cost allocation: { [partidaGroup]: { [sid]: percentage } }
   costAlloc: Record<string, Record<number, number>>;
+  pacCanales: PacCanal[];  // patient channels
+};
+
+type PacCanal = {
+  id: number;
+  canal: string;      // e.g. "Instagram", "Google", "Boca a boca"
+  pacientes: number;  // total patients from this channel
 };
 
 type Servicio = {
@@ -69,6 +77,11 @@ type Profesional = {
   pct: number;
   srvIds: number[];
   vacM: number[];  // 12 monthly vacation weeks
+  // NEW FIELDS:
+  srvFacM: Record<number, number[]>;  // { [sid]: 12 monthly billing }
+  srvSesM: Record<number, number[]>;  // { [sid]: 12 monthly sessions }
+  churnAnual: number;  // optional annual churn rate
+  npsMedio: number;    // average NPS
 };
 
 type Gasto = {
@@ -155,6 +168,7 @@ const DEFAULT_EJ1: Ej1Data = {
   ],
   costAlloc: {},
   dIngSrv: 0, dIngOtros: 0,
+  pacCanales: [],
 };
 
 const DEFAULT_EJ2: Ej2Data = {
@@ -191,11 +205,10 @@ const pct = (a: number, b: number) => (b ? ((a / b) * 100).toFixed(1) + "%" : "�
 
 // ── Phase completion checks ─────────────────────────────────
 function isEj1Complete(ej1: Ej1Data): boolean {
-  const hasFac = sum(ej1.aFac) > 0;
-  const hasSes = sum(ej1.aSes) > 0;
-  const hasSrvs = ej1.srvs.length > 0 && ej1.srvs.every((s) => s.name.trim() !== "");
+  const hasSrvs = ej1.srvs.length > 0 && ej1.srvs.every((s) => s.name.trim() !== "" && sum(s.facM) > 0);
+  const hasWrks = ej1.wrks.length > 0;
   const hasGastos = ej1.gastos.some((g) => g.valor > 0);
-  return hasFac && hasSes && hasSrvs && hasGastos;
+  return hasSrvs && hasWrks && hasGastos;
 }
 
 function isEj2Complete(ej2: Ej2Data): boolean {
@@ -570,29 +583,31 @@ function AutoField({ label, value, sublabel }: { label: string; value: string; s
 // ══════════════════════════════════════════════════════════════
 
 function Ejercicio1({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) => Ej1Data) => void }) {
-  const [section, setSection] = useState<"A" | "B" | "C" | "D" | "E">("A");
+  const [section, setSection] = useState<"B" | "C" | "F" | "D" | "E" | "A">("B");
 
   // Section completion checks for sub-locking
-  const sectionADone = sum(data.aFac) > 0 && sum(data.aSes) > 0;
   const sectionBDone = data.srvs.length > 0 && data.srvs.every((s) => s.name.trim() !== "" && sum(s.facM) > 0);
   const sectionCDone = data.wrks.length > 0 && data.wrks.every((w) => w.name.trim() !== "");
   const sectionDDone = data.gastos.some((g) => g.valor > 0);
+  const sectionEDone = Object.keys(data.costAlloc).some((k) => Object.keys(data.costAlloc[k] || {}).length > 0);
 
   const isSectionUnlocked = (key: string): boolean => {
-    if (key === "A") return true;
-    if (key === "B") return sectionADone;
-    if (key === "C") return sectionADone && sectionBDone;
-    if (key === "D") return sectionADone && sectionBDone && sectionCDone;
-    if (key === "E") return sectionADone && sectionBDone && sectionCDone && sectionDDone;
+    if (key === "B") return true;
+    if (key === "C") return sectionBDone;
+    if (key === "F") return sectionBDone;
+    if (key === "D") return sectionCDone;
+    if (key === "E") return sectionDDone;
+    if (key === "A") return sectionEDone;
     return false;
   };
 
   const SECTIONS = [
-    { key: "A" as const, label: "KPIs globales", icon: <BarChart3 size={14} /> },
     { key: "B" as const, label: "Servicios", icon: <Zap size={14} /> },
     { key: "C" as const, label: "Profesionales", icon: <Users size={14} /> },
+    { key: "F" as const, label: "Pacientes", icon: <Heart size={14} /> },
     { key: "D" as const, label: "Cuenta de resultados", icon: <Receipt size={14} /> },
     { key: "E" as const, label: "Margen por servicio", icon: <TrendingUp size={14} /> },
+    { key: "A" as const, label: "KPIs globales", icon: <BarChart3 size={14} /> },
   ];
 
   return (
@@ -601,11 +616,12 @@ function Ejercicio1({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data)
         title="Instrucciones: Radiografía actual"
         intro="En este ejercicio vas a recoger los datos del año anterior de tu clínica. Estos datos son la base de todo tu diagnóstico y plan de acción posterior. Cuanto más precisos sean, mejor será tu estrategia."
         steps={[
-          "Empieza por los KPIs globales: facturación, sesiones y pacientes nuevos mes a mes.",
-          "Después define los servicios que ofreces con su facturación y sesiones mensuales. El ticket medio se calcula automáticamente.",
-          "Añade a tu equipo de profesionales y sus servicios asignados.",
-          "Revisa la cuenta de resultados con todos los gastos operativos.",
-          "Reparte los costes entre servicios para conocer el margen unitario de cada uno.",
+          "Empieza por los Servicios: define cada servicio con su facturación y sesiones mensuales.",
+          "Añade a tu equipo de Profesionales con su rendimiento por servicio.",
+          "Registra los Pacientes nuevos por mes y los canales de captación.",
+          "Revisa la Cuenta de Resultados con gastos y repercusión de costes.",
+          "El Margen por servicio se calcula automáticamente.",
+          "Los KPIs globales se generan como resumen final de todo el análisis.",
         ]}
       />
 
@@ -632,41 +648,43 @@ function Ejercicio1({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data)
         })}
       </div>
 
-      {section === "A" && <SeccionA data={data} update={update} />}
       {section === "B" && <SeccionB data={data} update={update} />}
       {section === "C" && <SeccionC data={data} update={update} />}
+      {section === "F" && <SeccionF data={data} update={update} />}
       {section === "D" && <SeccionD data={data} update={update} />}
       {section === "E" && <SeccionE data={data} update={update} />}
+      {section === "A" && <SeccionA data={data} update={update} />}
     </div>
   );
 }
 
-// ── Section A: Global KPIs ──────────────────────────────────
+// ── Section A: Global KPIs (Read-Only Summary) ──────────────
 
 function SeccionA({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) => Ej1Data) => void }) {
-  const setMonthly = (field: "aFac" | "aSes" | "aNew", idx: number, val: number) => {
-    update((prev) => {
-      const arr = [...prev[field]];
-      arr[idx] = val;
-      return { ...prev, [field]: arr };
+  const totalGastos = sum(data.gastos.map((g) => g.valor));
+
+  // Helper to compute cost per service
+  const getServiceCosts = (sid: number): number => {
+    let total = 0;
+    COST_GROUPS.forEach((g) => {
+      const groupTotal = getGroupTotal(data.gastos, g.key);
+      const alloc = data.costAlloc?.[g.key]?.[sid] ?? (data.srvs.length > 0 ? 100 / data.srvs.length : 0);
+      const pct = alloc / 100;
+      total += groupTotal * pct;
     });
+    return total;
   };
 
   return (
     <div className="space-y-6">
       <InstructionDropdown
         color="green"
-        title="Instrucciones de este paso"
-        intro="Introduce los datos mensuales del año anterior. Si no tienes un dato exacto, pon tu mejor estimación. Estos datos nos darán el ticket medio global y las tendencias estacionales de tu clínica."
-        steps={[
-          "Rellena la facturación mensual sin IVA.",
-          "Añade las sesiones realizadas cada mes.",
-          "Indica los pacientes nuevos por mes.",
-          "Completa los KPIs anuales: pacientes activos, bajas y NPS.",
-        ]}
+        title="Tu resumen de radiografía"
+        intro="Esta sección muestra un resumen automático de todos los datos que has introducido en las secciones anteriores. Los KPIs globales se calculan automáticamente a partir de tus servicios, profesionales, pacientes y gastos."
       />
 
-      <Card title="Facturación mensual" subtitle="Facturación total por mes (sin IVA)">
+      {/* Card 1: Facturación mensual */}
+      <Card title="Facturación mensual" subtitle="Auto-calculada desde los servicios">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -679,19 +697,25 @@ function SeccionA({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
             </thead>
             <tbody>
               <tr>
-                {data.aFac.map((v, i) => (
-                  <td key={i} className="px-0.5">
-                    <NumInput value={v} onChange={(val) => setMonthly("aFac", i, val)} prefix="€" />
-                  </td>
-                ))}
-                <td className="px-2 text-center font-semibold text-gray-900">{fmt(sum(data.aFac))}</td>
+                {MONTHS.map((_, i) => {
+                  const monthTotal = sum(data.srvs.map((s) => s.facM[i] || 0));
+                  return (
+                    <td key={i} className="px-0.5 text-center text-sm text-gray-700">
+                      {fmt(monthTotal)}
+                    </td>
+                  );
+                })}
+                <td className="px-2 text-center font-semibold text-gray-900">
+                  {fmt(sum(data.srvs.map((s) => sum(s.facM))))}
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
       </Card>
 
-      <Card title="Sesiones mensuales" subtitle="Número total de sesiones realizadas por mes">
+      {/* Card 2: Sesiones mensuales */}
+      <Card title="Sesiones mensuales" subtitle="Auto-calculada desde los servicios">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -704,19 +728,25 @@ function SeccionA({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
             </thead>
             <tbody>
               <tr>
-                {data.aSes.map((v, i) => (
-                  <td key={i} className="px-0.5">
-                    <NumInput value={v} onChange={(val) => setMonthly("aSes", i, val)} />
-                  </td>
-                ))}
-                <td className="px-2 text-center font-semibold text-gray-900">{sum(data.aSes).toLocaleString("es-ES")}</td>
+                {MONTHS.map((_, i) => {
+                  const monthTotal = sum(data.srvs.map((s) => s.sesM[i] || 0));
+                  return (
+                    <td key={i} className="px-0.5 text-center text-sm text-gray-700">
+                      {monthTotal.toLocaleString("es-ES")}
+                    </td>
+                  );
+                })}
+                <td className="px-2 text-center font-semibold text-gray-900">
+                  {sum(data.srvs.map((s) => sum(s.sesM))).toLocaleString("es-ES")}
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
       </Card>
 
-      <Card title="Pacientes nuevos por mes">
+      {/* Card 3: Pacientes nuevos */}
+      <Card title="Pacientes nuevos" subtitle="Desde la sección Pacientes">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -730,19 +760,83 @@ function SeccionA({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
             <tbody>
               <tr>
                 {data.aNew.map((v, i) => (
-                  <td key={i} className="px-0.5">
-                    <NumInput value={v} onChange={(val) => setMonthly("aNew", i, val)} />
+                  <td key={i} className="px-0.5 text-center text-sm text-gray-700">
+                    {v.toLocaleString("es-ES")}
                   </td>
                 ))}
-                <td className="px-2 text-center font-semibold text-gray-900">{sum(data.aNew).toLocaleString("es-ES")}</td>
+                <td className="px-2 text-center font-semibold text-gray-900">
+                  {sum(data.aNew).toLocaleString("es-ES")}
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
       </Card>
 
-      <Card title="KPIs anuales globales">
+      {/* Card 4: KPIs por servicio */}
+      {data.srvs.length > 0 && (
+        <Card title="KPIs por servicio">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="pb-2 text-left text-xs font-medium text-gray-500">Servicio</th>
+                  <th className="pb-2 text-right text-xs font-medium text-gray-500">Ticket medio</th>
+                  <th className="pb-2 text-right text-xs font-medium text-gray-500">Margen %</th>
+                  <th className="pb-2 text-right text-xs font-medium text-gray-500">Recurrencia</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {data.srvs.map((srv) => {
+                  const totalFac = sum(srv.facM);
+                  const totalSes = sum(srv.sesM);
+                  const ticketMedio = totalSes > 0 ? totalFac / totalSes : 0;
+                  const costs = getServiceCosts(srv.sid);
+                  const margenPct = totalFac > 0 ? ((totalFac - costs) / totalFac) * 100 : 0;
+                  const recurrencia = totalSes > 0 && srv.pac > 0 ? totalSes / srv.pac : 0;
+
+                  return (
+                    <tr key={srv.sid}>
+                      <td className="py-2 font-medium text-gray-900">{srv.name}</td>
+                      <td className="py-2 text-right text-gray-600">{fmt(ticketMedio)}</td>
+                      <td className="py-2 text-right text-gray-600">{margenPct.toFixed(1)}%</td>
+                      <td className="py-2 text-right text-gray-600">{recurrencia.toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Card 5: KPIs globales */}
+      <Card title="KPIs globales" subtitle="Resumen consolidado">
         <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Churn rate global</label>
+            <div className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700">
+              {data.gPac > 0 ? pct(data.gChurn, data.gPac) : "—"}
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">NPS medio</label>
+            <div className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700">
+              {data.wrks.length > 0
+                ? (data.wrks.reduce((acc, w) => acc + (w.npsMedio || 0), 0) / data.wrks.length).toFixed(1)
+                : "—"}
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Ticket medio global</label>
+            <div className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700">
+              {sum(data.srvs.map((s) => sum(s.sesM))) > 0
+                ? fmt(sum(data.srvs.map((s) => sum(s.facM))) / sum(data.srvs.map((s) => sum(s.sesM))))
+                : "—"}
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Pacientes activos totales</label>
             <NumInput value={data.gPac} onChange={(v) => update((p) => ({ ...p, gPac: v }))} />
@@ -751,19 +845,122 @@ function SeccionA({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
             <label className="mb-1 block text-xs font-medium text-gray-600">Bajas / Churn anual</label>
             <NumInput value={data.gChurn} onChange={(v) => update((p) => ({ ...p, gChurn: v }))} />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">NPS (Net Promoter Score)</label>
-            <NumInput value={data.gNps} onChange={(v) => update((p) => ({ ...p, gNps: v }))} min={-100} />
-          </div>
         </div>
-        {data.gPac > 0 && (
-          <div className="mt-4 flex gap-4 rounded-lg bg-gray-50 px-4 py-3 text-sm">
-            <span>Tasa de churn: <strong>{pct(data.gChurn, data.gPac)}</strong></span>
-            <span>Ticket medio global: <strong>{sum(data.aFac) > 0 && sum(data.aSes) > 0 ? fmt(sum(data.aFac) / sum(data.aSes)) : "—"}</strong></span>
-            <span>Facturación/paciente: <strong>{fmt(sum(data.aFac) / data.gPac)}</strong></span>
-          </div>
-        )}
       </Card>
+
+      {/* Card 6: Margen unitario por servicio (same as SeccionE) */}
+      {data.srvs.length > 0 && (
+        <Card title="Margen unitario por servicio" subtitle="Facturación menos costes repercutidos, dividido entre sesiones">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="pb-3 text-left text-xs font-medium text-gray-500">Servicio</th>
+                  <th className="pb-3 text-right text-xs font-medium text-gray-500">Facturación</th>
+                  <th className="pb-3 text-right text-xs font-medium text-gray-500">Costes</th>
+                  <th className="pb-3 text-right text-xs font-medium text-gray-500">Beneficio</th>
+                  <th className="pb-3 text-right text-xs font-medium text-gray-500">Sesiones</th>
+                  <th className="pb-3 text-right text-xs font-medium text-gray-500">Margen/sesión</th>
+                  <th className="pb-3 text-right text-xs font-medium text-gray-500">Margen %</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {data.srvs.map((srv) => {
+                  const totalFac = sum(srv.facM);
+                  const totalSes = sum(srv.sesM);
+                  const costs = getServiceCosts(srv.sid);
+                  const beneficio = totalFac - costs;
+                  const margenUnitario = totalSes > 0 ? beneficio / totalSes : 0;
+                  const margenPct = totalFac > 0 ? (beneficio / totalFac) * 100 : 0;
+
+                  return (
+                    <tr key={srv.sid}>
+                      <td className="py-3 font-medium text-gray-900">{srv.name || `Servicio ${srv.sid}`}</td>
+                      <td className="py-3 text-right text-gray-600">{fmt(totalFac)}</td>
+                      <td className="py-3 text-right text-gray-600">{fmt(costs)}</td>
+                      <td className={`py-3 text-right font-semibold ${beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {fmt(beneficio)}
+                      </td>
+                      <td className="py-3 text-right text-gray-600">{totalSes.toLocaleString("es-ES")}</td>
+                      <td className={`py-3 text-right font-bold ${margenUnitario >= 0 ? "text-green-700" : "text-red-700"}`}>
+                        {totalSes > 0 ? fmt(margenUnitario) : "—"}
+                      </td>
+                      <td className={`py-3 text-right font-medium ${margenPct >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {totalFac > 0 ? `${margenPct.toFixed(1)}%` : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-200 font-semibold">
+                  <td className="py-3 text-gray-700">TOTAL</td>
+                  <td className="py-3 text-right text-gray-700">{fmt(sum(data.srvs.map((s) => sum(s.facM))))}</td>
+                  <td className="py-3 text-right text-gray-700">{fmt(totalGastos)}</td>
+                  <td className={`py-3 text-right ${sum(data.srvs.map((s) => sum(s.facM))) - totalGastos >= 0 ? "text-green-700" : "text-red-700"}`}>
+                    {fmt(sum(data.srvs.map((s) => sum(s.facM))) - totalGastos)}
+                  </td>
+                  <td className="py-3 text-right text-gray-700">{sum(data.srvs.map((s) => sum(s.sesM))).toLocaleString("es-ES")}</td>
+                  <td className="py-3 text-right text-gray-400">—</td>
+                  <td className="py-3 text-right text-gray-400">
+                    {sum(data.srvs.map((s) => sum(s.facM))) > 0
+                      ? `${(((sum(data.srvs.map((s) => sum(s.facM))) - totalGastos) / sum(data.srvs.map((s) => sum(s.facM)))) * 100).toFixed(1)}%`
+                      : "—"}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* Visual breakdown per service */}
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            {data.srvs.map((srv) => {
+              const totalFac = sum(srv.facM);
+              const costs = getServiceCosts(srv.sid);
+              const beneficio = totalFac - costs;
+              const margenPct = totalFac > 0 ? (beneficio / totalFac) * 100 : 0;
+
+              return (
+                <div key={srv.sid} className={`rounded-xl border-2 p-4 ${beneficio >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
+                  <p className="text-sm font-semibold text-gray-800">{srv.name || `Servicio ${srv.sid}`}</p>
+                  <div className="mt-2 flex items-baseline gap-2">
+                    <span className={`text-2xl font-bold ${beneficio >= 0 ? "text-green-700" : "text-red-700"}`}>
+                      {margenPct.toFixed(1)}%
+                    </span>
+                    <span className="text-xs text-gray-500">margen</span>
+                  </div>
+                  {/* Cost breakdown mini-bars */}
+                  <div className="mt-2 flex gap-0.5 overflow-hidden rounded-full" style={{ height: "6px" }}>
+                    {COST_GROUPS.map((g) => {
+                      const groupTotal = getGroupTotal(data.gastos, g.key);
+                      const alloc = data.costAlloc?.[g.key]?.[srv.sid] ?? (data.srvs.length > 0 ? 100 / data.srvs.length : 0);
+                      const pct = alloc / 100;
+                      const groupCost = groupTotal * pct;
+                      const pctOfFac = totalFac > 0 ? (groupCost / totalFac) * 100 : 0;
+                      if (pctOfFac === 0) return null;
+                      return (
+                        <div
+                          key={g.key}
+                          className={`${g.color}`}
+                          style={{ width: `${pctOfFac}%` }}
+                          title={`${g.label}: ${fmt(groupCost)} (${pctOfFac.toFixed(1)}%)`}
+                        />
+                      );
+                    })}
+                    {beneficio > 0 && (
+                      <div className="bg-green-400" style={{ width: `${margenPct}%` }} title={`Beneficio: ${fmt(beneficio)}`} />
+                    )}
+                  </div>
+                  <div className="mt-1 flex justify-between text-[10px] text-gray-400">
+                    <span>Costes: {fmt(costs)}</span>
+                    <span className={beneficio >= 0 ? "text-green-600" : "text-red-600"}>Beneficio: {fmt(beneficio)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -929,6 +1126,7 @@ function SeccionC({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
       wrks: [...prev.wrks, {
         wid: Math.max(0, ...prev.wrks.map((w) => w.wid)) + 1,
         name: "", tipo: "Fisioterapeuta", hconv: 1800, pct: 100, srvIds: [], vacM: EMPTY_12(),
+        srvFacM: {}, srvSesM: {}, churnAnual: 0, npsMedio: 0,
       }],
     }));
   };
@@ -1058,6 +1256,100 @@ function SeccionC({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
             </table>
           </div>
 
+          {/* Service billing and sessions per month */}
+          {wrk.srvIds.map((sid) => {
+            const srv = data.srvs.find((s) => s.sid === sid);
+            const facM = wrk.srvFacM[sid] || EMPTY_12();
+            const sesM = wrk.srvSesM[sid] || EMPTY_12();
+            return (
+              <div key={sid}>
+                {/* Billing row */}
+                <p className="mb-2 text-xs font-medium text-gray-500">Fac. {srv?.name || `Servicio ${sid}`}</p>
+                <div className="mb-3 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr>
+                        {MONTHS.map((m) => <th key={m} className="px-0.5 pb-1 text-center text-xs text-gray-400">{m}</th>)}
+                        <th className="px-1 pb-1 text-center text-xs font-semibold text-gray-600">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        {facM.map((v, i) => (
+                          <td key={i} className="px-0.5">
+                            <NumInput
+                              value={v}
+                              onChange={(val) =>
+                                updateWrk(wrk.wid, (w) => {
+                                  const newFacM = { ...w.srvFacM };
+                                  if (!newFacM[sid]) newFacM[sid] = EMPTY_12();
+                                  const arr = [...newFacM[sid]];
+                                  arr[i] = val;
+                                  newFacM[sid] = arr;
+                                  return { ...w, srvFacM: newFacM };
+                                })
+                              }
+                              className="text-xs"
+                            />
+                          </td>
+                        ))}
+                        <td className="px-1 text-center text-xs font-semibold">{fmt(sum(facM))}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Sessions row */}
+                <p className="mb-2 text-xs font-medium text-gray-500">Ses. {srv?.name || `Servicio ${sid}`}</p>
+                <div className="mb-3 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr>
+                        {MONTHS.map((m) => <th key={m} className="px-0.5 pb-1 text-center text-xs text-gray-400">{m}</th>)}
+                        <th className="px-1 pb-1 text-center text-xs font-semibold text-gray-600">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        {sesM.map((v, i) => (
+                          <td key={i} className="px-0.5">
+                            <NumInput
+                              value={v}
+                              onChange={(val) =>
+                                updateWrk(wrk.wid, (w) => {
+                                  const newSesM = { ...w.srvSesM };
+                                  if (!newSesM[sid]) newSesM[sid] = EMPTY_12();
+                                  const arr = [...newSesM[sid]];
+                                  arr[i] = val;
+                                  newSesM[sid] = arr;
+                                  return { ...w, srvSesM: newSesM };
+                                })
+                              }
+                              className="text-xs"
+                            />
+                          </td>
+                        ))}
+                        <td className="px-1 text-center text-xs font-semibold">{sum(sesM).toLocaleString("es-ES")}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Churn rate and NPS */}
+          <div className="mb-4 grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Churn rate anual (%)</label>
+              <NumInput value={wrk.churnAnual} onChange={(v) => updateWrk(wrk.wid, (w) => ({ ...w, churnAnual: v }))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">NPS medio</label>
+              <NumInput value={wrk.npsMedio} onChange={(v) => updateWrk(wrk.wid, (w) => ({ ...w, npsMedio: v }))} />
+            </div>
+          </div>
+
           <div className="flex justify-end">
             {data.wrks.length > 1 && (
               <button onClick={() => removePro(wrk.wid)} className="text-xs text-red-500 hover:text-red-700">
@@ -1075,13 +1367,171 @@ function SeccionC({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
   );
 }
 
+// ── Section F: Pacientes ─────────────────────────────────────
+
+function SeccionF({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) => Ej1Data) => void }) {
+  const setMonthly = (idx: number, val: number) => {
+    update((prev) => {
+      const arr = [...prev.aNew];
+      arr[idx] = val;
+      return { ...prev, aNew: arr };
+    });
+  };
+
+  const addCanal = () => {
+    update((prev) => ({
+      ...prev,
+      pacCanales: [...prev.pacCanales, {
+        id: Math.max(0, ...prev.pacCanales.map((c) => c.id)) + 1,
+        canal: "",
+        pacientes: 0,
+      }],
+    }));
+  };
+
+  const removeCanal = (id: number) => {
+    update((prev) => ({
+      ...prev,
+      pacCanales: prev.pacCanales.filter((c) => c.id !== id),
+    }));
+  };
+
+  const updateCanal = (id: number, fn: (c: PacCanal) => PacCanal) => {
+    update((prev) => ({
+      ...prev,
+      pacCanales: prev.pacCanales.map((c) => (c.id === id ? fn(c) : c)),
+    }));
+  };
+
+  return (
+    <div className="space-y-6">
+      <InstructionDropdown
+        color="green"
+        title="Instrucciones de este paso"
+        intro="Registra los pacientes nuevos por mes y cómo han conocido tu clínica. Esto te permitirá analizar tus canales de captación y su eficiencia."
+        steps={[
+          "Indica los pacientes nuevos cada mes del año anterior.",
+          "Añade los canales por los que te han conocido (Instagram, Google, recomendación, etc.).",
+          "Estima el número de pacientes que llegaron de cada canal.",
+        ]}
+      />
+
+      {/* Card 1: Pacientes nuevos por mes */}
+      <Card title="Pacientes nuevos por mes">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr>
+                {MONTHS.map((m) => (
+                  <th key={m} className="px-1 pb-2 text-center text-xs font-medium text-gray-500">{m}</th>
+                ))}
+                <th className="px-2 pb-2 text-center text-xs font-semibold text-gray-700">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {data.aNew.map((v, i) => (
+                  <td key={i} className="px-0.5">
+                    <NumInput value={v} onChange={(val) => setMonthly(i, val)} />
+                  </td>
+                ))}
+                <td className="px-2 text-center font-semibold text-gray-900">{sum(data.aNew).toLocaleString("es-ES")}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Card 2: Canales de captación */}
+      <Card title="¿Cómo nos han conocido?">
+        <div className="space-y-3">
+          {data.pacCanales.map((canal) => (
+            <div key={canal.id} className="flex items-center gap-3">
+              <input
+                type="text"
+                value={canal.canal}
+                onChange={(e) => updateCanal(canal.id, (c) => ({ ...c, canal: e.target.value }))}
+                placeholder="Ej: Instagram, Google, Boca a boca..."
+                className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+              />
+              <div className="w-32">
+                <NumInput
+                  value={canal.pacientes}
+                  onChange={(v) => updateCanal(canal.id, (c) => ({ ...c, pacientes: v }))}
+                  placeholder="Nº pacientes"
+                />
+              </div>
+              {data.pacCanales.length > 0 && (
+                <button onClick={() => removeCanal(canal.id)} className="text-gray-400 hover:text-red-500">
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={addCanal}
+          className="mt-3 flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+        >
+          <Plus size={14} /> Añadir canal
+        </button>
+        {data.pacCanales.length > 0 && (
+          <div className="mt-4 rounded-lg bg-gray-50 px-4 py-3">
+            <p className="text-xs font-medium text-gray-600">Total de pacientes por canales:</p>
+            <p className="mt-1 text-lg font-bold text-gray-900">
+              {sum(data.pacCanales.map((c) => c.pacientes)).toLocaleString("es-ES")}
+            </p>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 // ── Section D: Cuenta de resultados ─────────────────────────
 
 function SeccionD({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) => Ej1Data) => void }) {
-  const totalIngresos = sum(data.aFac) + data.dIngOtros;
+  const totalFacSrvs = sum(data.srvs.map((s) => sum(s.facM)));
+  const totalIngresos = totalFacSrvs + data.dIngOtros;
   const totalGastos = sum(data.gastos.map((g) => g.valor));
   const beneficio = totalIngresos - totalGastos;
   const margen = totalIngresos > 0 ? (beneficio / totalIngresos) * 100 : 0;
+
+  const alloc = data.costAlloc || {};
+
+  // Initialize even distribution if a group has no allocation yet
+  const getAlloc = (groupKey: string, sid: number): number => {
+    if (alloc[groupKey]?.[sid] != null) return alloc[groupKey][sid];
+    return data.srvs.length > 0 ? Math.round((100 / data.srvs.length) * 10) / 10 : 0;
+  };
+
+  // Independent allocation — no auto-balance, each slider is independent
+  const setAlloc = (groupKey: string, sid: number, value: number) => {
+    update((prev) => {
+      const prevAlloc = prev.costAlloc || {};
+      const groupAlloc = { ...(prevAlloc[groupKey] || {}) };
+
+      // If allocation doesn't exist yet, initialize with even distribution
+      if (Object.keys(groupAlloc).length === 0) {
+        prev.srvs.forEach((s) => {
+          groupAlloc[s.sid] = Math.round((100 / prev.srvs.length) * 10) / 10;
+        });
+      }
+
+      groupAlloc[sid] = Math.max(0, value);
+
+      return {
+        ...prev,
+        costAlloc: { ...prevAlloc, [groupKey]: groupAlloc },
+      };
+    });
+  };
+
+  // Compute totals
+  const totalGastosByGroup: Record<string, number> = {};
+  COST_GROUPS.forEach((g) => {
+    totalGastosByGroup[g.key] = getGroupTotal(data.gastos, g.key);
+  });
 
   const addGasto = () => {
     update((prev) => ({
@@ -1108,7 +1558,7 @@ function SeccionD({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
       {/* Revenue summary */}
       <Card title="Ingresos">
         <div className="grid gap-4 sm:grid-cols-3">
-          <AutoField label="Facturación por servicios" value={fmt(sum(data.aFac))} sublabel="Viene de la sección A" />
+          <AutoField label="Facturación por servicios" value={fmt(totalFacSrvs)} sublabel="Suma de servicios" />
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Otros ingresos</label>
             <NumInput
@@ -1215,113 +1665,6 @@ function SeccionD({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
         </button>
       </Card>
 
-      {/* P&L Summary */}
-      <Card title="Resumen de la cuenta de resultados">
-        <div className="grid gap-4 sm:grid-cols-4">
-          <div className="rounded-lg bg-blue-50 p-4 text-center">
-            <p className="text-xs font-medium text-blue-600">Ingresos</p>
-            <p className="mt-1 text-lg font-bold text-blue-700">{fmt(totalIngresos)}</p>
-          </div>
-          <div className="rounded-lg bg-gray-100 p-4 text-center">
-            <p className="text-xs font-medium text-gray-600">Gastos</p>
-            <p className="mt-1 text-lg font-bold text-gray-700">{fmt(totalGastos)}</p>
-          </div>
-          <div className={`rounded-lg p-4 text-center ${beneficio >= 0 ? "bg-green-50" : "bg-red-50"}`}>
-            <p className={`text-xs font-medium ${beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>Beneficio</p>
-            <p className={`mt-1 text-lg font-bold ${beneficio >= 0 ? "text-green-700" : "text-red-700"}`}>{fmt(beneficio)}</p>
-          </div>
-          <div className="rounded-lg bg-gray-50 p-4 text-center">
-            <p className="text-xs font-medium text-gray-600">Margen</p>
-            <p className="mt-1 text-lg font-bold text-gray-900">{margen.toFixed(1)}%</p>
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-// ── Section E: Repercusión de costes / Margen por servicio ──
-
-const COST_GROUPS = [
-  { key: "APROV", label: "Aprovisionamiento", color: "bg-amber-500" },
-  { key: "INFRA", label: "Infraestructura", color: "bg-blue-500" },
-  { key: "PERS_CLIN", label: "Personal clínico", color: "bg-indigo-500" },
-  { key: "PERS_GEST", label: "Personal gestión", color: "bg-purple-500" },
-  { key: "MKT", label: "Marketing", color: "bg-pink-500" },
-  { key: "OTROS", label: "Otros", color: "bg-gray-500" },
-];
-
-function getGroupTotal(gastos: Gasto[], groupKey: string): number {
-  return sum(gastos.filter((g) => g.partida.startsWith(groupKey)).map((g) => g.valor));
-}
-
-function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) => Ej1Data) => void }) {
-  const alloc = data.costAlloc || {};
-
-  // Initialize even distribution if a group has no allocation yet
-  const getAlloc = (groupKey: string, sid: number): number => {
-    if (alloc[groupKey]?.[sid] != null) return alloc[groupKey][sid];
-    // Default: distribute evenly across services
-    return data.srvs.length > 0 ? Math.round((100 / data.srvs.length) * 10) / 10 : 0;
-  };
-
-  // Independent allocation — no auto-balance, each slider is independent
-  const setAlloc = (groupKey: string, sid: number, value: number) => {
-    update((prev) => {
-      const prevAlloc = prev.costAlloc || {};
-      const groupAlloc = { ...(prevAlloc[groupKey] || {}) };
-
-      // If allocation doesn't exist yet, initialize with even distribution
-      if (Object.keys(groupAlloc).length === 0) {
-        prev.srvs.forEach((s) => {
-          groupAlloc[s.sid] = Math.round((100 / prev.srvs.length) * 10) / 10;
-        });
-      }
-
-      groupAlloc[sid] = Math.max(0, value);
-
-      return {
-        ...prev,
-        costAlloc: { ...prevAlloc, [groupKey]: groupAlloc },
-      };
-    });
-  };
-
-  // Compute totals
-  const totalGastosByGroup: Record<string, number> = {};
-  COST_GROUPS.forEach((g) => {
-    totalGastosByGroup[g.key] = getGroupTotal(data.gastos, g.key);
-  });
-  const totalGastos = sum(Object.values(totalGastosByGroup));
-
-  // Compute cost per service
-  const serviceCosts: Record<number, { total: number; byGroup: Record<string, number> }> = {};
-  data.srvs.forEach((srv) => {
-    const byGroup: Record<string, number> = {};
-    let total = 0;
-    COST_GROUPS.forEach((g) => {
-      const pct = getAlloc(g.key, srv.sid) / 100;
-      const cost = totalGastosByGroup[g.key] * pct;
-      byGroup[g.key] = cost;
-      total += cost;
-    });
-    serviceCosts[srv.sid] = { total, byGroup };
-  });
-
-  return (
-    <div className="space-y-6">
-      <InstructionDropdown
-        color="green"
-        title="Instrucciones: Repercusión de costes"
-        intro="Distribuye el porcentaje de cada partida de gasto entre tus servicios. Esto te permitirá conocer el margen real unitario de cada servicio. Usa los sliders o introduce el porcentaje manualmente. El total de cada partida debe sumar exactamente 100%."
-        steps={[
-          "Para cada grupo de costes (Aprovisionamiento, Infraestructura, etc.) distribuye el % entre servicios.",
-          "Mueve los sliders o escribe el porcentaje directamente. Cada servicio es independiente.",
-          "Asegúrate de que la suma de cada partida sea exactamente 100%. Si no lo es, verás un aviso.",
-          "Abajo verás el margen unitario resultante de cada servicio.",
-        ]}
-      />
-
       {/* Cost allocation per group */}
       {COST_GROUPS.map((group) => {
         const groupTotal = totalGastosByGroup[group.key];
@@ -1389,6 +1732,84 @@ function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) =
           </Card>
         );
       })}
+
+      {/* P&L Summary */}
+      <Card title="Resumen de la cuenta de resultados">
+        <div className="grid gap-4 sm:grid-cols-4">
+          <div className="rounded-lg bg-blue-50 p-4 text-center">
+            <p className="text-xs font-medium text-blue-600">Ingresos</p>
+            <p className="mt-1 text-lg font-bold text-blue-700">{fmt(totalIngresos)}</p>
+          </div>
+          <div className="rounded-lg bg-gray-100 p-4 text-center">
+            <p className="text-xs font-medium text-gray-600">Gastos</p>
+            <p className="mt-1 text-lg font-bold text-gray-700">{fmt(totalGastos)}</p>
+          </div>
+          <div className={`rounded-lg p-4 text-center ${beneficio >= 0 ? "bg-green-50" : "bg-red-50"}`}>
+            <p className={`text-xs font-medium ${beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>Beneficio</p>
+            <p className={`mt-1 text-lg font-bold ${beneficio >= 0 ? "text-green-700" : "text-red-700"}`}>{fmt(beneficio)}</p>
+          </div>
+          <div className="rounded-lg bg-gray-50 p-4 text-center">
+            <p className="text-xs font-medium text-gray-600">Margen</p>
+            <p className="mt-1 text-lg font-bold text-gray-900">{margen.toFixed(1)}%</p>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ── Section E: Repercusión de costes / Margen por servicio ──
+
+const COST_GROUPS = [
+  { key: "APROV", label: "Aprovisionamiento", color: "bg-amber-500" },
+  { key: "INFRA", label: "Infraestructura", color: "bg-blue-500" },
+  { key: "PERS_CLIN", label: "Personal clínico", color: "bg-indigo-500" },
+  { key: "PERS_GEST", label: "Personal gestión", color: "bg-purple-500" },
+  { key: "MKT", label: "Marketing", color: "bg-pink-500" },
+  { key: "OTROS", label: "Otros", color: "bg-gray-500" },
+];
+
+function getGroupTotal(gastos: Gasto[], groupKey: string): number {
+  return sum(gastos.filter((g) => g.partida.startsWith(groupKey)).map((g) => g.valor));
+}
+
+function SeccionE({ data, update }: { data: Ej1Data; update: (fn: (p: Ej1Data) => Ej1Data) => void }) {
+  const alloc = data.costAlloc || {};
+
+  // Initialize even distribution if a group has no allocation yet
+  const getAlloc = (groupKey: string, sid: number): number => {
+    if (alloc[groupKey]?.[sid] != null) return alloc[groupKey][sid];
+    return data.srvs.length > 0 ? Math.round((100 / data.srvs.length) * 10) / 10 : 0;
+  };
+
+  // Compute totals
+  const totalGastosByGroup: Record<string, number> = {};
+  COST_GROUPS.forEach((g) => {
+    totalGastosByGroup[g.key] = getGroupTotal(data.gastos, g.key);
+  });
+  const totalGastos = sum(Object.values(totalGastosByGroup));
+
+  // Compute cost per service
+  const serviceCosts: Record<number, { total: number; byGroup: Record<string, number> }> = {};
+  data.srvs.forEach((srv) => {
+    const byGroup: Record<string, number> = {};
+    let total = 0;
+    COST_GROUPS.forEach((g) => {
+      const pct = getAlloc(g.key, srv.sid) / 100;
+      const cost = totalGastosByGroup[g.key] * pct;
+      byGroup[g.key] = cost;
+      total += cost;
+    });
+    serviceCosts[srv.sid] = { total, byGroup };
+  });
+
+  return (
+    <div className="space-y-6">
+      <InstructionDropdown
+        color="green"
+        title="Instrucciones: Margen por servicio"
+        intro="Esta sección muestra el margen unitario resultante de cada servicio después de la repercusión de costes. Los costes se han distribuido en la sección anterior (Cuenta de resultados)."
+      />
 
       {/* Margin result per service */}
       <Card title="Margen unitario por servicio" subtitle="Facturación menos costes repercutidos, dividido entre sesiones">
