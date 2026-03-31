@@ -25,6 +25,7 @@ import {
   EyeOff,
   Upload,
   Type,
+  Sparkles,
 } from "lucide-react";
 
 interface Lesson {
@@ -94,6 +95,7 @@ export default function LessonEditorPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [formatting, setFormatting] = useState(false);
 
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -322,6 +324,44 @@ export default function LessonEditorPage() {
     );
   }
 
+  // ── Format with AI ──
+  async function handleFormatAI() {
+    if (!editorRef.current) return;
+
+    // Get plain text from editor
+    const rawText = editorRef.current.innerText?.trim();
+    if (!rawText) {
+      setError("No hay texto para maquetar");
+      return;
+    }
+
+    setFormatting(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/admin/lessons/format-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: rawText }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Error ${res.status}`);
+      }
+
+      const { html } = await res.json();
+      if (html && editorRef.current) {
+        editorRef.current.innerHTML = html;
+        scheduleAutoSave();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al maquetar");
+    } finally {
+      setFormatting(false);
+    }
+  }
+
   // ── Loading ──
   if (loading) {
     return (
@@ -493,6 +533,24 @@ export default function LessonEditorPage() {
             label="Aviso"
             onClick={insertWarning}
           />
+          <Divider />
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              handleFormatAI();
+            }}
+            disabled={formatting}
+            title="Maquetar con IA — da formato automático al texto"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-50 text-purple-700 hover:bg-purple-100 text-xs font-medium transition-colors disabled:opacity-50"
+          >
+            {formatting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Sparkles size={14} />
+            )}
+            {formatting ? "Maquetando..." : "Maquetar con IA"}
+          </button>
         </div>
 
         {/* Content editable area */}
