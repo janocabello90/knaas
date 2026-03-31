@@ -276,11 +276,11 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
         {collapsed && (
           <Link href={role === "SUPERADMIN" ? "/admin" : role === "MENTOR" ? "/mentor" : "/alumno/programa"} className="flex items-center justify-center w-full">
             <Image
-              src="/logo-fisioreferentes.png"
+              src="/FISIOREFERENTES_versiones-17.png"
               alt="FR"
               width={32}
               height={32}
-              className="h-7 w-auto"
+              className="h-8 w-auto"
               priority
             />
           </Link>
