@@ -82,9 +82,12 @@ export default function LessonEditorPage() {
   const [subtitle, setSubtitle] = useState("");
   const [stepNumber, setStepNumber] = useState(0);
   const [phase, setPhase] = useState("saber");
-  const [lessonNumber, setLessonNumber] = useState(0);
+  const [lessonNumber, setLessonNumber] = useState(1);
   const [published, setPublished] = useState(false);
   const [loading, setLoading] = useState(!isNew);
+  const [setupDone, setSetupDone] = useState(!isNew); // skip setup for existing lessons
+  const [existingLessons, setExistingLessons] = useState<Lesson[]>([]);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -100,6 +103,20 @@ export default function LessonEditorPage() {
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Load existing lessons for duplicate check ──
+  useEffect(() => {
+    if (!isNew) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/lessons");
+        if (res.ok) {
+          const data = await res.json();
+          setExistingLessons(data.lessons || []);
+        }
+      } catch { /* ignore */ }
+    })();
+  }, [isNew]);
 
   // ── Load lesson ──
   useEffect(() => {
@@ -362,11 +379,122 @@ export default function LessonEditorPage() {
     }
   }
 
+  // ── Check if duplicate exists ──
+  function checkDuplicate(step: number, ph: string, num: number): boolean {
+    return existingLessons.some(
+      (l) => l.step_number === step && l.phase === ph && l.lesson_number === num
+    );
+  }
+
+  const isDuplicate = isNew && checkDuplicate(stepNumber, phase, lessonNumber);
+
   // ── Loading ──
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  // ── Setup screen for new lessons ──
+  if (isNew && !setupDone) {
+    // Find existing lessons for the selected step+phase to suggest next number
+    const lessonsInPhase = existingLessons
+      .filter((l) => l.step_number === stepNumber && l.phase === phase)
+      .sort((a, b) => a.lesson_number - b.lesson_number);
+
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-md w-full p-8">
+          <button
+            onClick={() => router.push("/admin/contenido")}
+            className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600 mb-6"
+          >
+            <ArrowLeft size={16} /> Volver
+          </button>
+
+          <h1 className="text-xl font-bold text-gray-900 mb-1">Nueva lección</h1>
+          <p className="text-sm text-gray-500 mb-6">
+            Elige dónde va esta lección antes de empezar a escribir.
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Paso</label>
+              <select
+                value={stepNumber}
+                onChange={(e) => setStepNumber(Number(e.target.value))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              >
+                {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+                  <option key={n} value={n}>Paso {n}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Fase</label>
+              <select
+                value={phase}
+                onChange={(e) => setPhase(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="saber">Saber</option>
+                <option value="decidir">Decidir</option>
+                <option value="hacer">Activar</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Nº de lección</label>
+              <input
+                type="number"
+                min={0}
+                value={lessonNumber}
+                onChange={(e) => setLessonNumber(Number(e.target.value))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+
+            {/* Existing lessons in this step+phase */}
+            {lessonsInPhase.length > 0 && (
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs font-medium text-gray-500 mb-2">
+                  Lecciones existentes en Paso {stepNumber} · {phase}:
+                </p>
+                <div className="space-y-1">
+                  {lessonsInPhase.map((l) => (
+                    <div key={l.id} className="text-xs text-gray-600 flex items-center gap-2">
+                      <span className="font-mono bg-white border rounded px-1.5 py-0.5">
+                        #{l.lesson_number}
+                      </span>
+                      <span className="truncate">{l.title || "Sin título"}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Duplicate warning */}
+            {isDuplicate && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+                <AlertCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-700">
+                  Ya existe una lección en Paso {stepNumber} · {phase} · Nº {lessonNumber}. Elige otro número.
+                </p>
+              </div>
+            )}
+
+            <button
+              onClick={() => setSetupDone(true)}
+              disabled={isDuplicate}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed mt-2"
+            >
+              Crear lección
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
