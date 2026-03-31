@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
 
     const result = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
       `INSERT INTO lesson_content (step_number, phase, lesson_number, title, subtitle, blocks, published)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
        RETURNING *`,
       stepNumber,
       phase,

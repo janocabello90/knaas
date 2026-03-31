@@ -63,7 +63,7 @@ export async function PUT(
       paramCount++;
     }
     if (blocks !== undefined) {
-      updates.push(`blocks = $${paramCount}`);
+      updates.push(`blocks = $${paramCount}::jsonb`);
       values.push(JSON.stringify(blocks));
       paramCount++;
     }

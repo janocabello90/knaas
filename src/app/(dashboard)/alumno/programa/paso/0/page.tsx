@@ -107,7 +107,7 @@ interface DatabaseLesson {
   lesson_number: number;
   title: string;
   subtitle: string;
-  blocks: Block[];
+  blocks: Block[] | { html: string };
   published: boolean;
 }
 
@@ -291,23 +291,40 @@ export default function Paso0Page() {
 
   // NEW: Use database lessons if available, otherwise use static lessons
   const lessons = dbLessons.length > 0
-    ? dbLessons.map((lesson, idx) => ({
-        id: idx,
-        title: lesson.title,
-        subtitle: lesson.subtitle,
-        readingTime: "5-10 minutos",
-        sections: lesson.blocks.map((block): LessonSection => ({
-          type: block.type as LessonSection["type"],
-          content: block.content,
-          items: block.items,
-          icon: block.icon,
-          videoUrl: (block as unknown as Record<string, unknown>).videoUrl as string | undefined,
-          videoProvider: (block as unknown as Record<string, unknown>).videoProvider as "youtube" | "loom" | undefined,
-          imageUrl: (block as unknown as Record<string, unknown>).imageUrl as string | undefined,
-          imageAlt: (block as unknown as Record<string, unknown>).imageAlt as string | undefined,
-        }))
-      }))
-    : SABER_LESSONS;
+    ? dbLessons.map((lesson, idx) => {
+        const blocks = lesson.blocks;
+        // New HTML format
+        if (blocks && typeof blocks === "object" && !Array.isArray(blocks) && (blocks as { html?: string }).html) {
+          return {
+            id: idx,
+            title: lesson.title,
+            subtitle: lesson.subtitle,
+            readingTime: "5-10 minutos",
+            html: (blocks as { html: string }).html,
+            sections: [] as LessonSection[],
+          };
+        }
+        // Legacy block format
+        const blockArr = Array.isArray(blocks) ? blocks : [];
+        return {
+          id: idx,
+          title: lesson.title,
+          subtitle: lesson.subtitle,
+          readingTime: "5-10 minutos",
+          html: null as string | null,
+          sections: blockArr.map((block): LessonSection => ({
+            type: block.type as LessonSection["type"],
+            content: block.content,
+            items: block.items,
+            icon: block.icon,
+            videoUrl: (block as unknown as Record<string, unknown>).videoUrl as string | undefined,
+            videoProvider: (block as unknown as Record<string, unknown>).videoProvider as "youtube" | "loom" | undefined,
+            imageUrl: (block as unknown as Record<string, unknown>).imageUrl as string | undefined,
+            imageAlt: (block as unknown as Record<string, unknown>).imageAlt as string | undefined,
+          }))
+        };
+      })
+    : SABER_LESSONS.map((l) => ({ ...l, html: null as string | null }));
 
   // Ensure saberCompleted has enough entries for all lessons
   if (saberCompleted.length < lessons.length) {
@@ -363,7 +380,29 @@ export default function Paso0Page() {
 
         {/* Content */}
         <div className="rounded-xl border border-gray-200 bg-white p-8 space-y-4 mb-6">
-          {lesson.sections.map((section: LessonSection, idx: number) => {
+          {/* HTML content from new editor */}
+          {lesson.html && (
+            <div
+              className="prose prose-sm max-w-none
+                [&>h2]:text-lg [&>h2]:font-semibold [&>h2]:text-gray-900 [&>h2]:mt-6 [&>h2]:mb-2
+                [&>h3]:text-base [&>h3]:font-medium [&>h3]:text-gray-800 [&>h3]:mt-4 [&>h3]:mb-2
+                [&>p]:text-sm [&>p]:text-gray-700 [&>p]:leading-relaxed
+                [&>blockquote]:border-l-4 [&>blockquote]:border-blue-300 [&>blockquote]:bg-blue-50 [&>blockquote]:pl-4 [&>blockquote]:py-3 [&>blockquote]:pr-4 [&>blockquote]:rounded-r-lg [&>blockquote]:italic [&>blockquote]:text-sm [&>blockquote]:text-blue-900
+                [&>ul]:list-disc [&>ul]:pl-6 [&>ul]:space-y-2 [&>ul]:text-sm [&>ul]:text-gray-700
+                [&>ol]:list-decimal [&>ol]:pl-6 [&>ol]:space-y-2 [&>ol]:text-sm [&>ol]:text-gray-700
+                [&>hr]:border-gray-200 [&>hr]:my-6
+                [&>figure]:my-4 [&>figure>img]:rounded-lg [&>figure>img]:max-w-full
+                [&_.callout]:bg-amber-50 [&_.callout]:border [&_.callout]:border-amber-200 [&_.callout]:rounded-lg [&_.callout]:p-4 [&_.callout]:text-sm
+                [&_.warning]:bg-red-50 [&_.warning]:border [&_.warning]:border-red-200 [&_.warning]:rounded-lg [&_.warning]:p-4 [&_.warning]:text-sm
+                [&_a]:text-blue-600 [&_a]:underline
+                [&_.video-embed]:rounded-lg [&_.video-embed]:overflow-hidden [&_.video-embed]:my-4
+                [&_img]:max-w-full [&_img]:rounded-lg
+              "
+              dangerouslySetInnerHTML={{ __html: lesson.html }}
+            />
+          )}
+          {/* Legacy block-based content */}
+          {!lesson.html && lesson.sections.map((section: LessonSection, idx: number) => {
             switch (section.type) {
               case "heading":
                 return (
@@ -442,6 +481,7 @@ export default function Paso0Page() {
             }
           })}
         </div>
+
 
         {/* Mark as read button */}
         {!isRead && (
