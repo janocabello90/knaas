@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 8000,
+      max_tokens: 16000,
       messages: [
         {
           role: "user",
@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
 Tu ÚNICA tarea es recibir texto en bruto y devolver HTML bien maquetado. REGLAS ABSOLUTAS:
 
 1. NO cambies NI UNA SOLA PALABRA del texto original. No reescribas, no resumas, no parafrasees, no añadas contenido nuevo.
-2. Solo añade etiquetas HTML para dar formato y estructura visual.
+2. NO ELIMINES NINGÚN PÁRRAFO, FRASE NI FRAGMENTO. El HTML de salida debe contener TODO el texto original, desde la primera palabra hasta la última. Si el texto es largo, continúa hasta el final sin cortar.
+3. Solo añade etiquetas HTML para dar formato y estructura visual.
 
 ETIQUETAS QUE PUEDES USAR:
 - <h2> para títulos principales de sección
@@ -76,6 +77,8 @@ CRITERIOS DE MAQUETACIÓN:
 - Las advertencias tipo "cuidado con...", "no caigas en..." → <div class="warning">
 - Las citas literales o frases de referencia → <blockquote>
 - Usa <strong> para los 2-3 conceptos más importantes de cada sección, no más
+
+IMPORTANTE: Antes de devolver el resultado, verifica mentalmente que TODO el contenido original está presente en tu HTML. Si el texto de entrada tiene 20 párrafos, tu salida debe tener esos 20 párrafos formateados. No te saltes los últimos párrafos.
 
 DEVUELVE ÚNICAMENTE EL HTML. Sin explicaciones, sin comentarios, sin markdown, sin bloques de código. Solo el HTML limpio.`,
     });
