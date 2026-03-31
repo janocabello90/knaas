@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import Anthropic from "@anthropic-ai/sdk";
-
-const client = new Anthropic();
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,10 +10,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    // Get API key from current user or any SUPERADMIN
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { apiKeyEncrypted: true },
+    });
+
+    let apiKey = dbUser?.apiKeyEncrypted ?? null;
+    if (!apiKey) {
+      const admin = await prisma.user.findFirst({
+        where: { role: "SUPERADMIN", apiKeyEncrypted: { not: null } },
+        select: { apiKeyEncrypted: true },
+      });
+      apiKey = admin?.apiKeyEncrypted ?? null;
+    }
+
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "No hay API key de Anthropic configurada. Configúrala en Ajustes." },
+        { status: 400 }
+      );
+    }
+
     const { text } = await req.json();
     if (!text || typeof text !== "string") {
       return NextResponse.json({ error: "Texto requerido" }, { status: 400 });
     }
+
+    const client = new Anthropic({ apiKey });
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-20250514",
