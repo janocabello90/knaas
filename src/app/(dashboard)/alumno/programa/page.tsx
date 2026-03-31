@@ -215,9 +215,6 @@ export default async function ProgramaPage() {
                                 </span>
                               );
                             })}
-                            <span className="text-xs text-gray-400">
-                              {step.outputs.length} output{step.outputs.length !== 1 ? "s" : ""}
-                            </span>
                           </div>
                         )}
                       </div>
