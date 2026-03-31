@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 
@@ -43,27 +44,33 @@ export async function POST(request: Request) {
       );
     }
 
-    // Upload to Supabase Storage
-    const supabase = await createSupabaseServerClient();
+    // Use service role key for storage operations (anon key doesn't have storage permissions)
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     const timestamp = Date.now();
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const storagePath = `lesson-images/${timestamp}_${safeName}`;
+    const storagePath = `${timestamp}_${safeName}`;
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
 
     // Try to create bucket if it doesn't exist (idempotent)
-    await supabase.storage.createBucket("lesson-images", {
+    const { error: bucketError } = await supabaseAdmin.storage.createBucket("lesson-images", {
       public: true,
       allowedMimeTypes: ["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"],
       fileSizeLimit: 5 * 1024 * 1024,
-    }).catch(() => {
-      // Bucket already exists, ignore
     });
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    if (bucketError && !bucketError.message.includes("already exists")) {
+      console.error("Bucket creation error:", bucketError.message);
+      // Continue anyway — bucket may already exist with a different error message
+    }
+
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from("lesson-images")
-      .upload(`${timestamp}_${safeName}`, fileBuffer, {
+      .upload(storagePath, fileBuffer, {
         contentType: file.type,
         upsert: false,
       });
@@ -76,7 +83,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: urlData } = supabase.storage
+    const { data: urlData } = supabaseAdmin.storage
       .from("lesson-images")
       .getPublicUrl(uploadData.path);
 

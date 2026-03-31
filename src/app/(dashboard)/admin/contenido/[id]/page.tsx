@@ -103,6 +103,7 @@ export default function LessonEditorPage() {
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSaveRef = useRef<() => void>(() => {});
 
   // ── Load existing lessons for duplicate check ──
   useEffect(() => {
@@ -203,7 +204,7 @@ export default function LessonEditorPage() {
   const scheduleAutoSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      handleSave();
+      handleSaveRef.current();
     }, 3000);
   }, []);
 
@@ -252,6 +253,9 @@ export default function LessonEditorPage() {
     }
   }
 
+  // Keep ref in sync so auto-save always uses latest state
+  handleSaveRef.current = handleSave;
+
   // ── Exec command helpers ──
   function exec(command: string, value?: string) {
     document.execCommand(command, false, value);
@@ -278,11 +282,11 @@ export default function LessonEditorPage() {
           method: "POST",
           body: formData,
         });
-        if (!res.ok) throw new Error("Error subiendo imagen");
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error subiendo imagen");
         url = data.url;
-      } catch {
-        setError("Error subiendo imagen");
+      } catch (uploadErr) {
+        setError(uploadErr instanceof Error ? uploadErr.message : "Error subiendo imagen");
         setUploading(false);
         return;
       }
