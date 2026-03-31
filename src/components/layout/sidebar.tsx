@@ -67,6 +67,7 @@ const adminSections: NavSection[] = [
     items: [
       { label: "Contenido", href: "/admin/contenido", icon: <BookOpen size={20} /> },
       { label: "Cerebro FR", href: "/admin/cerebro-fr", icon: <Brain size={20} /> },
+      { label: "Graduación", href: "/admin/graduacion", icon: <GraduationCap size={20} /> },
       { label: "Cuadro de Mandos", href: "/admin/metricas", icon: <BarChart3 size={20} /> },
     ],
   },
