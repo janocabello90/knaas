@@ -215,7 +215,6 @@ export default function MetricasPage() {
   const [nps, setNps] = useState<number | null>(null);
   const [externalNps, setExternalNps] = useState<{
     connected: boolean;
-    npsScore: number | null;
     avgScore: number | null;
     total: number;
     promoters: number;
@@ -277,7 +276,6 @@ export default function MetricasPage() {
           if (npsData.connected && npsData.metrics) {
             setExternalNps({
               connected: true,
-              npsScore: npsData.metrics.npsScore,
               avgScore: npsData.metrics.avgScore,
               total: npsData.metrics.total,
               promoters: npsData.metrics.promoters,
@@ -301,7 +299,7 @@ export default function MetricasPage() {
               }
             }
           } else {
-            setExternalNps({ connected: false, npsScore: null, avgScore: null, total: 0, promoters: 0, detractors: 0, trend: null });
+            setExternalNps({ connected: false, avgScore: null, total: 0, promoters: 0, detractors: 0, trend: null });
           }
         }
       } catch {
@@ -585,13 +583,14 @@ export default function MetricasPage() {
               {externalNps?.connected ? (
                 <div className="mt-1">
                   <div className="flex items-baseline gap-2">
-                    <span className={cn("text-2xl font-bold", externalNps.npsScore !== null && externalNps.npsScore >= 50 ? "text-emerald-600" : externalNps.npsScore !== null && externalNps.npsScore >= 0 ? "text-amber-600" : "text-red-600")}>
-                      {externalNps.npsScore ?? "—"}
+                    <span className={cn("text-2xl font-bold", externalNps.avgScore !== null && externalNps.avgScore >= 8 ? "text-emerald-600" : externalNps.avgScore !== null && externalNps.avgScore >= 6 ? "text-amber-600" : "text-red-600")}>
+                      {externalNps.avgScore ?? "—"}
                     </span>
+                    <span className="text-xs text-gray-400">/10</span>
                     {externalNps.trend === "up" && <TrendingUp size={14} className="text-emerald-500" />}
                     {externalNps.trend === "down" && <TrendingDown size={14} className="text-red-500" />}
                   </div>
-                  <p className="text-[10px] text-gray-500">{externalNps.total} respuestas · media {externalNps.avgScore ?? "—"}/10</p>
+                  <p className="text-[10px] text-gray-500">{externalNps.total} respuestas</p>
                 </div>
               ) : (
                 <p className="mt-2 text-2xl font-bold text-gray-900">{nps ?? "—"}</p>
@@ -927,16 +926,15 @@ export default function MetricasPage() {
                       Datos reales de NPS FisioReferentes{externalNps.clinicName ? ` — ${externalNps.clinicName}` : ""}
                     </span>
                   </div>
-                  <div className="mt-3 grid grid-cols-3 gap-3">
+                  <div className="mt-3 grid grid-cols-2 gap-3">
                     <div className="rounded-lg bg-white p-3">
-                      <p className="text-xs text-gray-500">NPS Score</p>
-                      <p className={cn("text-xl font-bold", externalNps.npsScore !== null && externalNps.npsScore >= 50 ? "text-emerald-600" : externalNps.npsScore !== null && externalNps.npsScore >= 0 ? "text-amber-600" : "text-red-600")}>
-                        {externalNps.npsScore ?? "—"}
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-white p-3">
-                      <p className="text-xs text-gray-500">Puntuación media</p>
-                      <p className="text-xl font-bold text-gray-900">{externalNps.avgScore ?? "—"}/10</p>
+                      <p className="text-xs text-gray-500">Puntuación</p>
+                      <div className="flex items-baseline gap-1">
+                        <p className={cn("text-xl font-bold", externalNps.avgScore !== null && externalNps.avgScore >= 8 ? "text-emerald-600" : externalNps.avgScore !== null && externalNps.avgScore >= 6 ? "text-amber-600" : "text-red-600")}>
+                          {externalNps.avgScore ?? "—"}
+                        </p>
+                        <span className="text-xs text-gray-400">/10</span>
+                      </div>
                     </div>
                     <div className="rounded-lg bg-white p-3">
                       <p className="text-xs text-gray-500">Respuestas (90d)</p>

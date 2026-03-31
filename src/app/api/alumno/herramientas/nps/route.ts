@@ -81,16 +81,11 @@ export async function GET() {
       });
     }
 
-    // 4. Calculate NPS metrics
+    // 4. Calculate metrics — main metric is AVG(score) on 0-10 scale
     const total = responses?.length ?? 0;
     const promoters = responses?.filter((r) => r.category === "promoter").length ?? 0;
     const passives = responses?.filter((r) => r.category === "passive").length ?? 0;
     const detractors = responses?.filter((r) => r.category === "detractor").length ?? 0;
-
-    const npsScore =
-      total > 0
-        ? Math.round(((promoters - detractors) / total) * 100)
-        : null;
 
     const avgScore =
       total > 0
@@ -101,7 +96,7 @@ export async function GET() {
           )
         : null;
 
-    // 5. Trend: compare last 30 days vs previous 30 days
+    // 5. Trend: compare AVG last 30 days vs previous 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const sixtyDaysAgo = new Date();
@@ -116,31 +111,24 @@ export async function GET() {
           new Date(r.created_at) < thirtyDaysAgo
       ) ?? [];
 
-    const recentNps =
+    const recentAvg =
       recentResponses.length > 0
-        ? Math.round(
-            ((recentResponses.filter((r) => r.category === "promoter").length -
-              recentResponses.filter((r) => r.category === "detractor").length) /
-              recentResponses.length) *
-              100
+        ? Number(
+            (recentResponses.reduce((sum, r) => sum + r.score, 0) / recentResponses.length).toFixed(1)
           )
         : null;
 
-    const previousNps =
+    const previousAvg =
       previousResponses.length > 0
-        ? Math.round(
-            ((previousResponses.filter((r) => r.category === "promoter").length -
-              previousResponses.filter((r) => r.category === "detractor")
-                .length) /
-              previousResponses.length) *
-              100
+        ? Number(
+            (previousResponses.reduce((sum, r) => sum + r.score, 0) / previousResponses.length).toFixed(1)
           )
         : null;
 
     let trend: "up" | "down" | "stable" | null = null;
-    if (recentNps !== null && previousNps !== null) {
-      if (recentNps > previousNps) trend = "up";
-      else if (recentNps < previousNps) trend = "down";
+    if (recentAvg !== null && previousAvg !== null) {
+      if (recentAvg > previousAvg) trend = "up";
+      else if (recentAvg < previousAvg) trend = "down";
       else trend = "stable";
     }
 
@@ -153,22 +141,17 @@ export async function GET() {
       staff: r.staff_members,
     }));
 
-    // 7. Per-staff NPS (top 5)
+    // 7. Per-staff avg score (top 5)
     const staffMap = new Map<
       string,
-      { promoters: number; detractors: number; total: number }
+      { sumScores: number; total: number }
     >();
     for (const r of responses ?? []) {
       if (r.staff_members) {
         for (const staff of r.staff_members) {
-          const s = staffMap.get(staff) ?? {
-            promoters: 0,
-            detractors: 0,
-            total: 0,
-          };
+          const s = staffMap.get(staff) ?? { sumScores: 0, total: 0 };
           s.total++;
-          if (r.category === "promoter") s.promoters++;
-          if (r.category === "detractor") s.detractors++;
+          s.sumScores += r.score;
           staffMap.set(staff, s);
         }
       }
@@ -177,10 +160,10 @@ export async function GET() {
     const staffNps = Array.from(staffMap.entries())
       .map(([name, s]) => ({
         name,
-        nps: Math.round(((s.promoters - s.detractors) / s.total) * 100),
+        avg: Number((s.sumScores / s.total).toFixed(1)),
         total: s.total,
       }))
-      .sort((a, b) => b.nps - a.nps)
+      .sort((a, b) => b.avg - a.avg)
       .slice(0, 5);
 
     return NextResponse.json({
@@ -191,15 +174,14 @@ export async function GET() {
         teamSize: clinic.team_members?.length ?? 0,
       },
       metrics: {
-        npsScore,
         avgScore,
         total,
         promoters,
         passives,
         detractors,
         trend,
-        recentNps,
-        previousNps,
+        recentAvg,
+        previousAvg,
       },
       latestResponses,
       staffNps,

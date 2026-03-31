@@ -29,15 +29,14 @@ interface NpsData {
   npsUrl?: string;
   clinic?: { name: string; slug: string; teamSize: number };
   metrics?: {
-    npsScore: number | null;
     avgScore: number | null;
     total: number;
     promoters: number;
     passives: number;
     detractors: number;
     trend: "up" | "down" | "stable" | null;
-    recentNps: number | null;
-    previousNps: number | null;
+    recentAvg: number | null;
+    previousAvg: number | null;
   };
   latestResponses?: {
     score: number;
@@ -46,7 +45,7 @@ interface NpsData {
     date: string;
     staff: string[] | null;
   }[];
-  staffNps?: { name: string; nps: number; total: number }[];
+  staffNps?: { name: string; avg: number; total: number }[];
   npsAppUrl?: string;
   surveyUrl?: string;
 }
@@ -95,15 +94,15 @@ const TOOLS: Tool[] = [
 
 function npsColor(score: number | null) {
   if (score === null) return "text-gray-400";
-  if (score >= 50) return "text-emerald-600";
-  if (score >= 0) return "text-amber-600";
+  if (score >= 8) return "text-emerald-600";
+  if (score >= 6) return "text-amber-600";
   return "text-red-600";
 }
 
 function npsBg(score: number | null) {
   if (score === null) return "bg-gray-50";
-  if (score >= 50) return "bg-emerald-50";
-  if (score >= 0) return "bg-amber-50";
+  if (score >= 8) return "bg-emerald-50";
+  if (score >= 6) return "bg-amber-50";
   return "bg-red-50";
 }
 
@@ -272,13 +271,14 @@ function NpsCard() {
       {/* Metric cards */}
       {m && (
         <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
-          {/* NPS Score */}
-          <div className={`rounded-lg p-3 ${npsBg(m.npsScore)}`}>
-            <p className="text-xs font-medium text-gray-500">NPS Score</p>
+          {/* Avg Score (main metric) */}
+          <div className={`rounded-lg p-3 ${npsBg(m.avgScore)}`}>
+            <p className="text-xs font-medium text-gray-500">Puntuación</p>
             <div className="mt-1 flex items-baseline gap-2">
-              <span className={`text-2xl font-bold ${npsColor(m.npsScore)}`}>
-                {m.npsScore !== null ? m.npsScore : "—"}
+              <span className={`text-2xl font-bold ${npsColor(m.avgScore)}`}>
+                {m.avgScore !== null ? m.avgScore : "—"}
               </span>
+              <span className="text-xs text-gray-400">/10</span>
               {m.trend === "up" && (
                 <TrendingUp size={16} className="text-emerald-500" />
               )}
@@ -342,7 +342,7 @@ function NpsCard() {
                 <div>
                   <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
                     <Users size={14} />
-                    NPS por Fisioterapeuta
+                    Puntuación por Fisioterapeuta
                   </h4>
                   <div className="space-y-2">
                     {data.staffNps.map((s) => (
@@ -356,9 +356,9 @@ function NpsCard() {
                             {s.total} resp.
                           </span>
                           <span
-                            className={`text-sm font-bold ${npsColor(s.nps)}`}
+                            className={`text-sm font-bold ${npsColor(s.avg)}`}
                           >
-                            {s.nps}
+                            {s.avg}
                           </span>
                         </div>
                       </div>
