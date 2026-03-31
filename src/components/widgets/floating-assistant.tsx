@@ -13,7 +13,7 @@ import {
   X,
   Key,
   ExternalLink,
-  MessageCircle,
+  Sparkles,
   Minus,
   Maximize2,
 } from "lucide-react";
@@ -220,7 +220,7 @@ export function FloatingAssistant() {
           className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-transform hover:scale-105 hover:bg-blue-700 active:scale-95"
           aria-label="Abrir asistente IA"
         >
-          <MessageCircle size={24} />
+          <Sparkles size={24} />
           {hasUnread && (
             <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
