@@ -31,8 +31,8 @@ export default async function DashboardLayout({
           {children}
         </ConsentGate>
       </main>
-      {/* Floating AI assistant — only for students with active enrollment */}
-      {user.role === "ALUMNO" && activeProgram && <FloatingAssistant />}
+      {/* Floating AI assistant — for students with active enrollment + superadmins */}
+      {(user.role === "ALUMNO" && activeProgram || user.role === "SUPERADMIN") && <FloatingAssistant />}
 
       {/* Legal footer */}
       <footer className="ml-64 border-t border-gray-200 bg-white px-6 py-4">
