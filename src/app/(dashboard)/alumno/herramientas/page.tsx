@@ -78,23 +78,13 @@ const TOOLS: Tool[] = [
     status: "active",
   },
   {
-    id: "brujula",
-    name: "La Brújula",
+    id: "valoraciones",
+    name: "App Valoraciones y Anamnesis",
     description:
-      "Tu mapa de madurez empresarial como dueño de clínica. Descubre dónde estás y hacia dónde ir.",
+      "Digitaliza tus valoraciones iniciales y anamnesis. Crea formularios personalizados para cada tipo de paciente y consulta todo el historial desde un solo lugar.",
     icon: <Sparkles size={24} />,
     color: "text-purple-600",
     bgColor: "bg-purple-50",
-    status: "coming-soon",
-  },
-  {
-    id: "calculadora",
-    name: "Calculadora de Rentabilidad",
-    description:
-      "Simula escenarios de pricing, costes y capacidad para tu clínica.",
-    icon: <BarChart3 size={24} />,
-    color: "text-emerald-600",
-    bgColor: "bg-emerald-50",
     status: "coming-soon",
   },
 ];
@@ -163,29 +153,75 @@ function NpsCard() {
     );
   }
 
-  // Not connected — show setup CTA
+  // Not connected — show setup guide
   if (!data?.connected) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <div className="flex items-center gap-3">
+      <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="flex items-center gap-3 border-b border-gray-100 p-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50">
             <Star size={20} className="text-amber-600" />
           </div>
           <div className="flex-1">
             <h3 className="font-semibold text-gray-900">NPS FisioReferentes</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              {data?.message || "Configura tu sistema NPS para medir la satisfacción de pacientes."}
+            <p className="text-xs text-gray-500">
+              Mide la satisfacción de tus pacientes con encuestas NPS
             </p>
           </div>
         </div>
-        <div className="mt-4">
+
+        <div className="space-y-4 p-4">
+          <p className="text-sm text-gray-600">
+            El sistema NPS de FisioReferentes te permite enviar encuestas de satisfacción a tus pacientes, hacer seguimiento por fisioterapeuta y redirigir a los promotores a Google Reviews.
+          </p>
+
+          <div className="rounded-lg bg-amber-50 p-4">
+            <h4 className="text-sm font-semibold text-amber-800">
+              ¿Cómo configurarlo?
+            </h4>
+            <ol className="mt-2 space-y-2 text-sm text-amber-700">
+              <li className="flex gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-800">1</span>
+                <span>
+                  <strong>Crea tu cuenta NPS</strong> en{" "}
+                  <a
+                    href="https://nps-fisioreferentes.vercel.app/registro"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-amber-900"
+                  >
+                    nps-fisioreferentes.vercel.app
+                  </a>{" "}
+                  usando el <strong>mismo email</strong> que usas aquí en la academia.
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-800">2</span>
+                <span>
+                  <strong>Configura tu clínica</strong>: nombre, equipo, enlace de Google Reviews y colores.
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-800">3</span>
+                <span>
+                  <strong>Comparte el enlace de encuesta</strong> con tus pacientes (por WhatsApp, QR, email...).
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-800">4</span>
+                <span>
+                  <strong>Vuelve aquí</strong> y verás tus métricas NPS actualizadas automáticamente.
+                </span>
+              </li>
+            </ol>
+          </div>
+
           <a
-            href={data?.npsUrl || "https://nps-fisioreferentes.vercel.app/registro"}
+            href="https://nps-fisioreferentes.vercel.app/registro"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-amber-700"
           >
-            Configurar NPS
+            Crear mi cuenta NPS
             <ExternalLink size={14} />
           </a>
         </div>
