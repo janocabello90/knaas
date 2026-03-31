@@ -45,19 +45,35 @@ type NavSection = {
 
 const adminSections: NavSection[] = [
   {
+    title: "General",
     items: [
       { label: "Dashboard", href: "/admin", icon: <LayoutDashboard size={20} /> },
+    ],
+  },
+  {
+    title: "Alumnos",
+    items: [
       { label: "Alumnos", href: "/admin/alumnos", icon: <Users size={20} /> },
       { label: "Cohortes", href: "/admin/cohortes", icon: <FolderKanban size={20} /> },
-      { label: "Cerebro FR", href: "/admin/cerebro-fr", icon: <Brain size={20} /> },
-      { label: "Cuadro de Mandos", href: "/admin/metricas", icon: <BarChart3 size={20} /> },
       { label: "Mentorías", href: "/admin/mentorias", icon: <Calendar size={20} /> },
       { label: "Mensajes", href: "/admin/mensajes", icon: <Mail size={20} />, badgeId: "unread-messages" },
-      { label: "Accesos", href: "/admin/accesos", icon: <KeyRound size={20} /> },
-      { label: "Facturación", href: "/admin/facturacion", icon: <CreditCard size={20} /> },
+    ],
+  },
+  {
+    title: "Académico",
+    items: [
       { label: "Contenido", href: "/admin/contenido", icon: <BookOpen size={20} /> },
+      { label: "Cerebro FR", href: "/admin/cerebro-fr", icon: <Brain size={20} /> },
+      { label: "Cuadro de Mandos", href: "/admin/metricas", icon: <BarChart3 size={20} /> },
+    ],
+  },
+  {
+    title: "Sistema",
+    items: [
       { label: "Monitoring IA", href: "/admin/monitoring", icon: <Activity size={20} /> },
       { label: "Tareas", href: "/admin/tareas", icon: <ClipboardCheck size={20} /> },
+      { label: "Accesos", href: "/admin/accesos", icon: <KeyRound size={20} /> },
+      { label: "Facturación", href: "/admin/facturacion", icon: <CreditCard size={20} /> },
     ],
   },
 ];
