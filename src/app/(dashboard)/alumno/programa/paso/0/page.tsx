@@ -83,11 +83,33 @@ const DEFAULT_EJ2: Ej2Data = {
 };
 
 // ══════════════════════════════════════════════════════════════
-// SABER LESSONS — imported from separate data file
+// SABER LESSONS — imported from separate data file (fallback)
 // ══════════════════════════════════════════════════════════════
 
 import { SABER_LESSONS } from "./saber-content";
 import type { LessonSection } from "./saber-content";
+
+// ── NEW: Types for database lessons ──
+interface Block {
+  id: string;
+  type: "heading" | "paragraph" | "quote" | "callout" | "list" | "warning" | "video" | "separator";
+  content?: string;
+  items?: string[];
+  icon?: "pin" | "bulb" | "warning" | "flag";
+  videoUrl?: string;
+  videoProvider?: "youtube" | "loom";
+}
+
+interface DatabaseLesson {
+  id: string;
+  step_number: number;
+  phase: string;
+  lesson_number: number;
+  title: string;
+  subtitle: string;
+  blocks: Block[];
+  published: boolean;
+}
 
 // ══════════════════════════════════════════════════════════════
 // TABS
@@ -120,20 +142,40 @@ export default function Paso0Page() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [dbLessons, setDbLessons] = useState<DatabaseLesson[]>([]); // NEW: Database lessons
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // ── Load ──
   useEffect(() => {
-    fetch("/api/alumno/programa/paso/0")
-      .then((r) => r.json())
-      .then((d) => {
+    const loadData = async () => {
+      try {
+        // Load paso 0 exercise data
+        const res = await fetch("/api/alumno/programa/paso/0");
+        const d = await res.json();
         if (d?.ejercicio1) setEj1({ ...DEFAULT_EJ1, ...d.ejercicio1 });
         if (d?.ejercicio2) setEj2({ ...DEFAULT_EJ2, ...d.ejercicio2 });
         if (d?.saberCompleted) setSaberCompleted(d.saberCompleted);
         setData(d || {});
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+
+        // NEW: Load database lessons for this step
+        try {
+          const lessonsRes = await fetch("/api/alumno/programa/paso/0/lessons?phase=saber");
+          const lessonsData = await lessonsRes.json();
+          if (lessonsData.lessons && lessonsData.lessons.length > 0) {
+            setDbLessons(lessonsData.lessons);
+          }
+        } catch (err) {
+          console.warn("Could not load database lessons, using static content:", err);
+          // Continue with static content
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, []);
 
   // ── Auto-save ──
@@ -247,6 +289,27 @@ export default function Paso0Page() {
   const prevTab = tabIdx > 0 ? TABS[tabIdx - 1] : null;
   const nextTab = tabIdx < TABS.length - 1 ? TABS[tabIdx + 1] : null;
 
+  // NEW: Use database lessons if available, otherwise use static lessons
+  const lessons = dbLessons.length > 0
+    ? dbLessons.map((lesson, idx) => ({
+        id: idx,
+        title: lesson.title,
+        subtitle: lesson.subtitle,
+        readingTime: "5-10 minutos",
+        sections: lesson.blocks.map((block): LessonSection => ({
+          type: block.type as LessonSection["type"],
+          content: block.content,
+          items: block.items,
+          icon: block.icon,
+        }))
+      }))
+    : SABER_LESSONS;
+
+  // Ensure saberCompleted has enough entries for all lessons
+  if (saberCompleted.length < lessons.length) {
+    setSaberCompleted([...saberCompleted, ...Array(lessons.length - saberCompleted.length).fill(false)]);
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -260,7 +323,7 @@ export default function Paso0Page() {
   // ══════════════════════════════════════════════════════════════
 
   if (phase === "saber" && activeLesson !== null) {
-    const lesson = SABER_LESSONS[activeLesson];
+    const lesson = lessons[activeLesson]; // NEW: Use lessons variable which can be from DB or static
     const isRead = saberCompleted[activeLesson];
 
     return (
@@ -297,6 +360,16 @@ export default function Paso0Page() {
         {/* Content */}
         <div className="rounded-xl border border-gray-200 bg-white p-8 space-y-4 mb-6">
           {lesson.sections.map((section: LessonSection, idx: number) => {
+            // NEW: Handle video blocks from database
+            if (section.type === "video" && 'videoUrl' in section) {
+              const videoSection = section as LessonSection & { videoUrl?: string; videoProvider?: string };
+              return (
+                <div key={idx} className="rounded-lg overflow-hidden bg-gray-100 aspect-video">
+                  <RenderVideoBlock url={videoSection.videoUrl || ''} provider={videoSection.videoProvider as "youtube" | "loom" | undefined} />
+                </div>
+              );
+            }
+
             switch (section.type) {
               case "heading":
                 return (
@@ -429,7 +502,7 @@ export default function Paso0Page() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium text-gray-700">
-              Progreso: {saberCompleted.filter(Boolean).length} de 6 lecciones
+              Progreso: {saberCompleted.filter(Boolean).length} de {lessons.length} lecciones
               completadas
             </p>
           </div>
@@ -437,7 +510,7 @@ export default function Paso0Page() {
             <div
               className="h-2 rounded-full bg-green-500 transition-all"
               style={{
-                width: `${(saberCompleted.filter(Boolean).length / 6) * 100}%`,
+                width: `${(saberCompleted.filter(Boolean).length / lessons.length) * 100}%`,
               }}
             />
           </div>
@@ -445,7 +518,7 @@ export default function Paso0Page() {
 
         {/* Lessons list */}
         <div className="space-y-3">
-          {SABER_LESSONS.map((lesson, idx) => {
+          {lessons.map((lesson, idx) => {
             const isRead = saberCompleted[idx];
             return (
               <button
@@ -1132,5 +1205,53 @@ export default function Paso0Page() {
         )}
       </div>
     </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// NEW: Helper component to render videos from database
+// ══════════════════════════════════════════════════════════════
+
+function RenderVideoBlock({
+  url,
+  provider,
+}: {
+  url: string;
+  provider?: "youtube" | "loom";
+}) {
+  if (!url) {
+    return <p className="text-sm text-gray-600 p-4">No hay vídeo para mostrar</p>;
+  }
+
+  let embedUrl = "";
+
+  if (provider === "youtube" || url.includes("youtube.com") || url.includes("youtu.be")) {
+    let videoId = "";
+    if (url.includes("youtube.com")) {
+      videoId = url.split("v=")[1]?.split("&")[0] || "";
+    } else if (url.includes("youtu.be")) {
+      videoId = url.split("youtu.be/")[1]?.split("?")[0] || "";
+    }
+    if (videoId) {
+      embedUrl = `https://www.youtube.com/embed/${videoId}`;
+    }
+  } else if (provider === "loom" || url.includes("loom.com")) {
+    const loomId = url.split("/").pop()?.split("?")[0] || "";
+    if (loomId) {
+      embedUrl = `https://www.loom.com/embed/${loomId}`;
+    }
+  }
+
+  if (!embedUrl) {
+    return <p className="text-sm text-gray-600 p-4">URL de vídeo no válida</p>;
+  }
+
+  return (
+    <iframe
+      src={embedUrl}
+      className="w-full h-full"
+      allowFullScreen
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    />
   );
 }
