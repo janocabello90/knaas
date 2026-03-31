@@ -28,6 +28,7 @@ import {
   KeyRound,
   CreditCard,
   MessageSquare,
+  Wrench,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 
@@ -136,6 +137,14 @@ function buildAlumnoSections(activeProgram: string | null): NavSection[] {
     title: "Métricas de mi clínica",
     items: [
       { label: "Mi Cuadro de Mandos", href: "/alumno/metricas", icon: <BarChart3 size={20} /> },
+    ],
+  });
+
+  // Hub de Herramientas
+  sections.push({
+    title: "Hub de Herramientas",
+    items: [
+      { label: "Herramientas FR", href: "/alumno/herramientas", icon: <Wrench size={20} /> },
     ],
   });
 
