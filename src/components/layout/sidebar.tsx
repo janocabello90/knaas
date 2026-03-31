@@ -26,6 +26,7 @@ import {
   ClipboardCheck,
   KeyRound,
   CreditCard,
+  MessageSquare,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 
@@ -57,6 +58,7 @@ const adminSections: NavSection[] = [
       { label: "Cohortes", href: "/admin/cohortes", icon: <FolderKanban size={20} /> },
       { label: "Mentorías", href: "/admin/mentorias", icon: <Calendar size={20} /> },
       { label: "Mensajes", href: "/admin/mensajes", icon: <Mail size={20} />, badgeId: "unread-messages" },
+      { label: "Feed", href: "/admin/feed", icon: <MessageSquare size={20} /> },
     ],
   },
   {
@@ -107,6 +109,9 @@ function buildAlumnoSections(activeProgram: string | null): NavSection[] {
     { label: "Mensajes", href: "/alumno/mensajes", icon: <Mail size={20} />, badgeId: "unread-messages" },
   ];
 
+  // Note: "Mensajes" stays in ACTIVA for direct messages from admin/mentor.
+  // "Feed" goes in Comunidad for public threaded discussions.
+
   const sections: NavSection[] = [];
 
   // Active program section
@@ -136,6 +141,7 @@ function buildAlumnoSections(activeProgram: string | null): NavSection[] {
   sections.push({
     title: "Comunidad",
     items: [
+      { label: "Feed", href: "/alumno/comunidad/feed", icon: <MessageSquare size={20} /> },
       { label: "Mi Cohorte", href: "/alumno/comunidad/mi-cohorte", icon: <Users size={20} /> },
       { label: "Resto de Alumnos", href: "/alumno/comunidad/alumnos", icon: <UserCircle size={20} /> },
     ],
