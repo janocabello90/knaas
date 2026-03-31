@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     if (stepNumber) where.step_number = parseInt(stepNumber, 10);
     if (phase) where.phase = phase;
 
-    const lessons = await prisma.$queryRawUnsafe(
+    const lessons = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
       `SELECT * FROM lesson_content ${
         Object.keys(where).length > 0
           ? `WHERE ${Object.entries(where)
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "stepNumber es requerido" }, { status: 400 });
     }
 
-    const result = await prisma.$queryRawUnsafe(
+    const result = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
       `INSERT INTO lesson_content (step_number, phase, lesson_number, title, subtitle, blocks, published)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,

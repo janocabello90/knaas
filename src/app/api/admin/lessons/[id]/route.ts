@@ -15,7 +15,7 @@ export async function GET(
 
     const { id } = await params;
 
-    const lesson = await prisma.$queryRawUnsafe(
+    const lesson = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
       `SELECT * FROM lesson_content WHERE id = $1`,
       id
     );
@@ -80,7 +80,7 @@ export async function PUT(
       return NextResponse.json({ error: "Nada que actualizar" }, { status: 400 });
     }
 
-    const result = await prisma.$queryRawUnsafe(
+    const result = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
       `UPDATE lesson_content SET ${updates.join(", ")} WHERE id = $1 RETURNING *`,
       ...values
     );
@@ -110,7 +110,7 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const result = await prisma.$queryRawUnsafe(
+    const result = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
       `DELETE FROM lesson_content WHERE id = $1 RETURNING *`,
       id
     );

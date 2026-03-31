@@ -24,7 +24,7 @@ export async function GET(
     const { searchParams } = new URL(req.url);
     const phase = searchParams.get("phase") || "saber";
 
-    const lessons = await prisma.$queryRawUnsafe(
+    const lessons = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
       `SELECT * FROM lesson_content
        WHERE step_number = $1 AND phase = $2 AND published = true
        ORDER BY lesson_number ASC`,
