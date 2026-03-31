@@ -198,8 +198,9 @@ export default async function ProgramaPage() {
 
                         {!isLocked && (
                           <div className="mt-1.5 flex items-center gap-3">
-                            {["saber", "decidir", "hacer"].map((obj) => {
-                              const done = progress?.[obj as "saber" | "decidir" | "hacer"] ?? false;
+                            {(["saber", "decidir", "hacer"] as const).map((obj) => {
+                              const done = progress?.[obj] ?? false;
+                              const label = obj === "hacer" ? "activar" : obj;
                               return (
                                 <span
                                   key={obj}
@@ -210,7 +211,7 @@ export default async function ProgramaPage() {
                                       : "bg-gray-100 text-gray-400"
                                   )}
                                 >
-                                  {obj}
+                                  {label}
                                 </span>
                               );
                             })}

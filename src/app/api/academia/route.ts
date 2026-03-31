@@ -26,7 +26,7 @@ Paso actual: ${stepNumber} — ${step?.name ?? "N/A"}
 Objetivos del paso:
 - SABER: ${step?.saber ?? "N/A"}
 - DECIDIR: ${step?.decidir ?? "N/A"}
-- HACER: ${step?.hacer ?? "N/A"}
+- ACTIVAR: ${step?.hacer ?? "N/A"}
 
 Outputs esperados: ${step?.outputs.join(", ") ?? "N/A"}
 `;
