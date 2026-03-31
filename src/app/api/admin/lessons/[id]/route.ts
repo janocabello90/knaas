@@ -16,7 +16,7 @@ export async function GET(
     const { id } = await params;
 
     const lesson = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-      `SELECT * FROM lesson_content WHERE id = $1`,
+      `SELECT * FROM lesson_content WHERE id = $1::uuid`,
       id
     );
 
@@ -81,7 +81,7 @@ export async function PUT(
     }
 
     const result = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-      `UPDATE lesson_content SET ${updates.join(", ")} WHERE id = $1 RETURNING *`,
+      `UPDATE lesson_content SET ${updates.join(", ")} WHERE id = $1::uuid RETURNING *`,
       ...values
     );
 
@@ -111,7 +111,7 @@ export async function DELETE(
     const { id } = await params;
 
     const result = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-      `DELETE FROM lesson_content WHERE id = $1 RETURNING *`,
+      `DELETE FROM lesson_content WHERE id = $1::uuid RETURNING *`,
       id
     );
 
