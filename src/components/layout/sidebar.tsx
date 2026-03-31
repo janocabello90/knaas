@@ -260,9 +260,12 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 px-4">
+      <div className={cn(
+        "shrink-0 border-b border-gray-200",
+        collapsed ? "flex flex-col items-center py-3 px-1 gap-2" : "flex h-16 items-center justify-between px-4"
+      )}>
         {!collapsed && (
-          <Link href={role === "SUPERADMIN" ? "/admin" : role === "MENTOR" ? "/mentor" : "/alumno/programa"} className="flex items-center">
+          <Link href={role === "SUPERADMIN" ? "/admin" : role === "MENTOR" ? "/mentor" : "/alumno/programa"} className="flex items-center min-w-0">
             <Image
               src="/logo-fisioreferentes.png"
               alt="FisioReferentes"
@@ -274,20 +277,23 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
           </Link>
         )}
         {collapsed && (
-          <Link href={role === "SUPERADMIN" ? "/admin" : role === "MENTOR" ? "/mentor" : "/alumno/programa"} className="flex items-center justify-center w-full">
+          <Link href={role === "SUPERADMIN" ? "/admin" : role === "MENTOR" ? "/mentor" : "/alumno/programa"} className="flex items-center justify-center">
             <Image
               src="/FISIOREFERENTES_versiones-17.png"
               alt="FR"
-              width={32}
-              height={32}
-              className="h-8 w-auto"
+              width={48}
+              height={48}
+              className="h-10 w-10 object-contain"
               priority
             />
           </Link>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          className={cn(
+            "rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600",
+            collapsed && "mt-0"
+          )}
         >
           <ChevronLeft
             size={18}
