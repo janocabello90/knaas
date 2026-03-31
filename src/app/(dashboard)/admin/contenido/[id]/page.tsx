@@ -22,6 +22,8 @@ import {
   ArrowLeft,
   Image as ImageIcon,
   Upload,
+  ClipboardPaste,
+  X,
 } from "lucide-react";
 
 type BlockType = "heading" | "paragraph" | "quote" | "callout" | "list" | "warning" | "video" | "image" | "separator";
@@ -86,6 +88,8 @@ export default function LessonEditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [isDraft, setIsDraft] = useState(true);
+  const [showPasteModal, setShowPasteModal] = useState(false);
+  const [pasteText, setPasteText] = useState("");
 
   // Debounce the lesson data for auto-save
   const debouncedLesson = useDebounce(lesson, 2000);
@@ -219,6 +223,117 @@ export default function LessonEditorPage() {
       setSaveStatus("error");
       setError(err instanceof Error ? err.message : "Error al guardar");
     }
+  }
+
+  function parseTextToBlocks(text: string): Block[] {
+    const lines = text.split("\n");
+    const blocks: Block[] = [];
+    let currentListItems: string[] = [];
+
+    function flushList() {
+      if (currentListItems.length > 0) {
+        blocks.push({
+          id: crypto.randomUUID(),
+          type: "list",
+          items: [...currentListItems],
+        });
+        currentListItems = [];
+      }
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // Skip empty lines (they just separate paragraphs)
+      if (!trimmed) {
+        flushList();
+        continue;
+      }
+
+      // Detect headings: lines in ALL CAPS (min 3 chars, no lowercase) or lines starting with #
+      if (trimmed.startsWith("# ")) {
+        flushList();
+        blocks.push({
+          id: crypto.randomUUID(),
+          type: "heading",
+          content: trimmed.replace(/^#+\s*/, ""),
+        });
+        continue;
+      }
+
+      if (trimmed.length >= 3 && trimmed === trimmed.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(trimmed) && !/^\d/.test(trimmed) && trimmed.length < 120) {
+        flushList();
+        blocks.push({
+          id: crypto.randomUUID(),
+          type: "heading",
+          content: trimmed,
+        });
+        continue;
+      }
+
+      // Detect quotes: lines starting with > or "
+      if (trimmed.startsWith(">") || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+        flushList();
+        blocks.push({
+          id: crypto.randomUUID(),
+          type: "quote",
+          content: trimmed.replace(/^>\s*/, "").replace(/^"|"$/g, ""),
+        });
+        continue;
+      }
+
+      // Detect list items: lines starting with - , * , • , or numbered (1. 2. etc)
+      if (/^[-*•]\s+/.test(trimmed) || /^\d+[.)]\s+/.test(trimmed)) {
+        const itemText = trimmed.replace(/^[-*•]\s+/, "").replace(/^\d+[.)]\s+/, "");
+        currentListItems.push(itemText);
+        continue;
+      }
+
+      // Detect separators: lines that are just --- or === or ___
+      if (/^[-=_]{3,}$/.test(trimmed)) {
+        flushList();
+        blocks.push({
+          id: crypto.randomUUID(),
+          type: "separator",
+        });
+        continue;
+      }
+
+      // Detect video URLs
+      if ((trimmed.includes("youtube.com") || trimmed.includes("youtu.be") || trimmed.includes("loom.com")) && trimmed.startsWith("http")) {
+        flushList();
+        let provider: "youtube" | "loom" | undefined;
+        if (trimmed.includes("youtube") || trimmed.includes("youtu.be")) provider = "youtube";
+        else if (trimmed.includes("loom")) provider = "loom";
+        blocks.push({
+          id: crypto.randomUUID(),
+          type: "video",
+          videoUrl: trimmed,
+          videoProvider: provider,
+        });
+        continue;
+      }
+
+      // Everything else is a paragraph
+      flushList();
+      blocks.push({
+        id: crypto.randomUUID(),
+        type: "paragraph",
+        content: trimmed,
+      });
+    }
+
+    flushList();
+    return blocks;
+  }
+
+  function handlePasteContent() {
+    if (!lesson || !pasteText.trim()) return;
+    const newBlocks = parseTextToBlocks(pasteText);
+    setLesson({ ...lesson, blocks: [...lesson.blocks, ...newBlocks] });
+    setPasteText("");
+    setShowPasteModal(false);
   }
 
   if (loading) {
@@ -368,7 +483,16 @@ export default function LessonEditorPage() {
 
       {/* Blocks editor */}
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900">Contenido</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">Contenido</h2>
+          <button
+            onClick={() => setShowPasteModal(true)}
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <ClipboardPaste className="w-4 h-4" />
+            Pegar contenido
+          </button>
+        </div>
 
         {lesson.blocks.length === 0 ? (
           <div className="text-center py-8 rounded-lg border border-dashed border-gray-300 bg-gray-50">
@@ -428,6 +552,57 @@ export default function LessonEditorPage() {
           </div>
         )}
       </div>
+
+      {/* Paste content modal */}
+      {showPasteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Pegar contenido</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Pega el texto de la lección. Se detectarán automáticamente títulos, párrafos, listas y citas. Después podrás añadir imágenes y vídeos.
+                </p>
+              </div>
+              <button
+                onClick={() => { setShowPasteModal(false); setPasteText(""); }}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="px-6 py-4 flex-1 overflow-auto">
+              <textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder={"Pega aquí todo el contenido de la lección...\n\nLos TÍTULOS EN MAYÚSCULAS se detectan como encabezados.\nLas líneas que empiezan con - o • se convierten en listas.\nLas líneas con > se convierten en citas.\nLos enlaces de YouTube o Loom se incrustan como vídeo.\nEl resto se convierte en párrafos."}
+                className="w-full h-80 px-4 py-3 border border-gray-300 rounded-lg text-sm outline-none resize-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 font-mono"
+                autoFocus
+              />
+              {pasteText.trim() && (
+                <p className="text-xs text-gray-500 mt-2">
+                  Se generarán ~{parseTextToBlocks(pasteText).length} bloques
+                </p>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
+              <button
+                onClick={() => { setShowPasteModal(false); setPasteText(""); }}
+                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handlePasteContent}
+                disabled={!pasteText.trim()}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                Convertir en bloques
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
