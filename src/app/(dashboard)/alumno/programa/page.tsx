@@ -11,6 +11,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { UnreadMessagesWidget } from "@/components/widgets/unread-messages-widget";
 
 const monthColors: Record<number, { bg: string; border: string; text: string; badge: string }> = {
@@ -88,12 +89,21 @@ export default async function ProgramaPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Mi Programa ACTIVA</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          {enrollment?.cohort.name ?? "Sin cohorte asignada"} &middot; 17 pasos (0–16) &middot; 4 meses
-        </p>
+      {/* Header with ACTIVA logo */}
+      <div className="mb-8 flex items-center gap-4">
+        <Image
+          src="/ACTIVA.png"
+          alt="Programa ACTIVA"
+          width={80}
+          height={80}
+          className="h-16 w-auto"
+        />
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Mi Programa ACTIVA</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            {enrollment?.cohort.name ?? "Sin cohorte asignada"} &middot; 17 pasos (0–16) &middot; 4 meses
+          </p>
+        </div>
       </div>
 
       {/* Progress Bar */}

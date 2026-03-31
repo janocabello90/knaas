@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { ConsentGate } from "@/components/legal/consent-gate";
 import { FloatingAssistant } from "@/components/widgets/floating-assistant";
 import Link from "next/link";
+import Image from "next/image";
 
 export default async function DashboardLayout({
   children,
@@ -36,12 +37,21 @@ export default async function DashboardLayout({
 
       {/* Legal footer */}
       <footer className="ml-64 border-t border-gray-200 bg-white px-6 py-4">
-        <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-gray-500">
-          <span>© {new Date().getFullYear()} FISIOREFERENTES SL</span>
-          <Link href="/legal/aviso-legal" className="hover:text-gray-700">Aviso Legal</Link>
-          <Link href="/legal/privacidad" className="hover:text-gray-700">Privacidad</Link>
-          <Link href="/legal/cookies" className="hover:text-gray-700">Cookies</Link>
-          <Link href="/legal/terminos" className="hover:text-gray-700">Términos</Link>
+        <div className="flex flex-col items-center gap-3">
+          <Image
+            src="/logo-fisioreferentes.png"
+            alt="FisioReferentes"
+            width={120}
+            height={30}
+            className="h-6 w-auto opacity-60"
+          />
+          <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-gray-500">
+            <span>© {new Date().getFullYear()} FISIOREFERENTES SL</span>
+            <Link href="/legal/aviso-legal" className="hover:text-gray-700">Aviso Legal</Link>
+            <Link href="/legal/privacidad" className="hover:text-gray-700">Privacidad</Link>
+            <Link href="/legal/cookies" className="hover:text-gray-700">Cookies</Link>
+            <Link href="/legal/terminos" className="hover:text-gray-700">Términos</Link>
+          </div>
         </div>
       </footer>
     </div>

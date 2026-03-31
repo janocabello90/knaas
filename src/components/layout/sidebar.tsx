@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -261,13 +262,28 @@ export function Sidebar({ role, userName, userInitials, activeProgram = null }: 
       {/* Logo */}
       <div className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 px-4">
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <GraduationCap size={28} className="text-blue-600" />
-            <div>
-              <p className="text-sm font-bold text-gray-900">Academia</p>
-              <p className="text-[10px] text-gray-500">FisioReferentes</p>
-            </div>
-          </div>
+          <Link href={role === "SUPERADMIN" ? "/admin" : role === "MENTOR" ? "/mentor" : "/alumno/programa"} className="flex items-center">
+            <Image
+              src="/logo-fisioreferentes.png"
+              alt="FisioReferentes"
+              width={160}
+              height={40}
+              className="h-9 w-auto"
+              priority
+            />
+          </Link>
+        )}
+        {collapsed && (
+          <Link href={role === "SUPERADMIN" ? "/admin" : role === "MENTOR" ? "/mentor" : "/alumno/programa"} className="flex items-center justify-center w-full">
+            <Image
+              src="/logo-fisioreferentes.png"
+              alt="FR"
+              width={32}
+              height={32}
+              className="h-7 w-auto"
+              priority
+            />
+          </Link>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
