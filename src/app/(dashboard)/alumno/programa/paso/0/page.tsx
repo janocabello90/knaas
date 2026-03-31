@@ -301,10 +301,10 @@ export default function Paso0Page() {
           content: block.content,
           items: block.items,
           icon: block.icon,
-          videoUrl: (block as Record<string, unknown>).videoUrl as string | undefined,
-          videoProvider: (block as Record<string, unknown>).videoProvider as "youtube" | "loom" | undefined,
-          imageUrl: (block as Record<string, unknown>).imageUrl as string | undefined,
-          imageAlt: (block as Record<string, unknown>).imageAlt as string | undefined,
+          videoUrl: (block as unknown as Record<string, unknown>).videoUrl as string | undefined,
+          videoProvider: (block as unknown as Record<string, unknown>).videoProvider as "youtube" | "loom" | undefined,
+          imageUrl: (block as unknown as Record<string, unknown>).imageUrl as string | undefined,
+          imageAlt: (block as unknown as Record<string, unknown>).imageAlt as string | undefined,
         }))
       }))
     : SABER_LESSONS;

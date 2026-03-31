@@ -21,6 +21,7 @@ import {
   AlertCircle as SeparatorIcon,
   ArrowLeft,
   Image as ImageIcon,
+  Upload,
 } from "lucide-react";
 
 type BlockType = "heading" | "paragraph" | "quote" | "callout" | "list" | "warning" | "video" | "image" | "separator";
@@ -689,27 +690,7 @@ function BlockEditor({
         )}
 
         {block.type === "image" && (
-          <div className="space-y-3">
-            <input
-              type="text"
-              value={block.imageUrl || ""}
-              onChange={(e) => onChange({ ...block, imageUrl: e.target.value })}
-              placeholder="Pega la URL de la imagen..."
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm outline-none"
-            />
-            <input
-              type="text"
-              value={block.imageAlt || ""}
-              onChange={(e) => onChange({ ...block, imageAlt: e.target.value })}
-              placeholder="Texto alternativo / pie de foto (opcional)"
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm outline-none"
-            />
-            {block.imageUrl && (
-              <div className="bg-gray-100 rounded overflow-hidden">
-                <img src={block.imageUrl} alt={block.imageAlt || ""} className="w-full max-h-96 object-contain" />
-              </div>
-            )}
-          </div>
+          <ImageBlockEditor block={block} onChange={onChange} />
         )}
 
         {block.type === "separator" && (
@@ -718,6 +699,165 @@ function BlockEditor({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Image Block Editor with Upload
+function ImageBlockEditor({
+  block,
+  onChange,
+}: {
+  block: Block;
+  onChange: (block: Block) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFileUpload(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Solo se permiten imágenes");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("La imagen no puede superar los 5MB");
+      return;
+    }
+
+    setUploading(true);
+    setUploadError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/admin/lessons/upload-image", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Error al subir la imagen");
+      }
+
+      onChange({ ...block, imageUrl: data.url });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Error al subir");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Upload area */}
+      {!block.imageUrl && (
+        <div
+          className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer"
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const file = e.dataTransfer.files[0];
+            if (file) handleFileUpload(file);
+          }}
+        >
+          {uploading ? (
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+              <p className="text-sm text-gray-600">Subiendo imagen...</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <Upload className="w-8 h-8 text-gray-400" />
+              <p className="text-sm text-gray-600">
+                Arrastra una imagen aquí o <span className="text-blue-600 font-medium">haz clic para seleccionar</span>
+              </p>
+              <p className="text-xs text-gray-400">PNG, JPG, GIF, WebP — Máx. 5MB</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFileUpload(file);
+          // Reset so the same file can be re-selected
+          e.target.value = "";
+        }}
+      />
+
+      {uploadError && (
+        <p className="text-sm text-red-600 flex items-center gap-1">
+          <AlertCircle className="w-4 h-4" />
+          {uploadError}
+        </p>
+      )}
+
+      {/* URL fallback — collapsed when image exists */}
+      {!block.imageUrl && (
+        <div className="flex items-center gap-2">
+          <div className="h-px bg-gray-200 flex-1" />
+          <span className="text-xs text-gray-400">o pega una URL</span>
+          <div className="h-px bg-gray-200 flex-1" />
+        </div>
+      )}
+
+      {!block.imageUrl && (
+        <input
+          type="text"
+          value={block.imageUrl || ""}
+          onChange={(e) => onChange({ ...block, imageUrl: e.target.value })}
+          placeholder="https://..."
+          className="w-full px-3 py-2 border border-gray-300 rounded text-sm outline-none"
+        />
+      )}
+
+      {/* Alt text */}
+      <input
+        type="text"
+        value={block.imageAlt || ""}
+        onChange={(e) => onChange({ ...block, imageAlt: e.target.value })}
+        placeholder="Texto alternativo / pie de foto (opcional)"
+        className="w-full px-3 py-2 border border-gray-300 rounded text-sm outline-none"
+      />
+
+      {/* Preview with replace option */}
+      {block.imageUrl && (
+        <div className="relative bg-gray-100 rounded overflow-hidden group/img">
+          <img
+            src={block.imageUrl}
+            alt={block.imageAlt || ""}
+            className="w-full max-h-96 object-contain"
+          />
+          <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover/img:opacity-100 transition-opacity">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3 py-1.5 bg-white/90 text-gray-700 rounded-lg text-xs font-medium shadow hover:bg-white transition-colors"
+            >
+              Cambiar imagen
+            </button>
+            <button
+              onClick={() => onChange({ ...block, imageUrl: "" })}
+              className="px-3 py-1.5 bg-red-500/90 text-white rounded-lg text-xs font-medium shadow hover:bg-red-600 transition-colors"
+            >
+              Eliminar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
