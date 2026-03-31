@@ -213,6 +213,18 @@ export default function MetricasPage() {
   const [totalPatients12m, setTotalPatients12m] = useState<number | null>(null);
   const [singleVisitPat12m, setSingleVisitPat12m] = useState<number | null>(null);
   const [nps, setNps] = useState<number | null>(null);
+  const [externalNps, setExternalNps] = useState<{
+    connected: boolean;
+    npsScore: number | null;
+    avgScore: number | null;
+    total: number;
+    promoters: number;
+    detractors: number;
+    trend: "up" | "down" | "stable" | null;
+    surveyUrl?: string;
+    npsAppUrl?: string;
+    clinicName?: string;
+  } | null>(null);
   const [useManualExpenses, setUseManualExpenses] = useState(false);
   const [monthlyExpenses, setMonthlyExpenses] = useState<Record<string, number>>({});
 
@@ -255,6 +267,45 @@ export default function MetricasPage() {
         setNps(latest.nps);
         setUseManualExpenses(latest.useManualExpenses ?? false);
         setMonthlyExpenses(latest.monthlyExpenses || {});
+      }
+
+      // Fetch external NPS data
+      try {
+        const npsRes = await fetch("/api/alumno/herramientas/nps");
+        if (npsRes.ok) {
+          const npsData = await npsRes.json();
+          if (npsData.connected && npsData.metrics) {
+            setExternalNps({
+              connected: true,
+              npsScore: npsData.metrics.npsScore,
+              avgScore: npsData.metrics.avgScore,
+              total: npsData.metrics.total,
+              promoters: npsData.metrics.promoters,
+              detractors: npsData.metrics.detractors,
+              trend: npsData.metrics.trend,
+              surveyUrl: npsData.surveyUrl,
+              npsAppUrl: npsData.npsAppUrl,
+              clinicName: npsData.clinic?.name,
+            });
+            // Auto-sync: use external avg score as NPS if no manual value set
+            if (npsData.metrics.avgScore != null) {
+              const avgRounded = Math.round(npsData.metrics.avgScore);
+              // Only auto-set if current nps matches old snapshot (not user-edited)
+              if (loadedSnapshots.length > 0) {
+                const latest = loadedSnapshots[loadedSnapshots.length - 1];
+                if (latest.nps === null || latest.nps === undefined) {
+                  setNps(avgRounded);
+                }
+              } else {
+                setNps(avgRounded);
+              }
+            }
+          } else {
+            setExternalNps({ connected: false, npsScore: null, avgScore: null, total: 0, promoters: 0, detractors: 0, trend: null });
+          }
+        }
+      } catch {
+        // External NPS not available, ignore
       }
     };
 
@@ -406,6 +457,11 @@ export default function MetricasPage() {
     setSuccessMsg("");
 
     try {
+      // Use external NPS avg score if connected, otherwise manual value
+      const npsValue = externalNps?.connected && externalNps.avgScore != null
+        ? Math.round(externalNps.avgScore)
+        : nps;
+
       const snapshot: KpiSnapshot = {
         id: `${editMonth}-${Date.now()}`,
         monthYear: editMonth,
@@ -414,7 +470,7 @@ export default function MetricasPage() {
         newPatients,
         totalPatients12m,
         singleVisitPat12m,
-        nps,
+        nps: npsValue,
         monthlyExpenses: useManualExpenses && Object.keys(monthlyExpenses).length > 0 ? monthlyExpenses : null,
         useManualExpenses,
         revenue: computedTotalRevenue || null,
@@ -519,9 +575,27 @@ export default function MetricasPage() {
                 {computedAvgTicket > 0 ? `${computedAvgTicket.toFixed(2)} €` : "—"}
               </p>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <p className="text-xs font-medium uppercase text-gray-500">NPS</p>
-              <p className="mt-2 text-2xl font-bold text-gray-900">{nps ?? "—"}</p>
+            <div className={cn("rounded-lg border border-gray-200 p-4", externalNps?.connected ? "bg-amber-50" : "bg-white")}>
+              <div className="flex items-center gap-1">
+                <p className="text-xs font-medium uppercase text-gray-500">NPS</p>
+                {externalNps?.connected && (
+                  <span className="rounded bg-amber-200 px-1 py-0.5 text-[10px] font-semibold text-amber-700">LIVE</span>
+                )}
+              </div>
+              {externalNps?.connected ? (
+                <div className="mt-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className={cn("text-2xl font-bold", externalNps.npsScore !== null && externalNps.npsScore >= 50 ? "text-emerald-600" : externalNps.npsScore !== null && externalNps.npsScore >= 0 ? "text-amber-600" : "text-red-600")}>
+                      {externalNps.npsScore ?? "—"}
+                    </span>
+                    {externalNps.trend === "up" && <TrendingUp size={14} className="text-emerald-500" />}
+                    {externalNps.trend === "down" && <TrendingDown size={14} className="text-red-500" />}
+                  </div>
+                  <p className="text-[10px] text-gray-500">{externalNps.total} respuestas · media {externalNps.avgScore ?? "—"}/10</p>
+                </div>
+              ) : (
+                <p className="mt-2 text-2xl font-bold text-gray-900">{nps ?? "—"}</p>
+              )}
             </div>
           </div>
 
@@ -844,27 +918,73 @@ export default function MetricasPage() {
 
           {/* 4. NPS */}
           <Section title="NPS" icon={<Star size={20} />}>
-            <div>
-              <p className="mb-3 text-sm text-gray-600">
-                En una escala del 0 al 10, ¿cuán probable es que tus pacientes te recomienden?
-              </p>
-              <div className="flex gap-2">
-                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setNps(n)}
-                    className={cn(
-                      "h-10 w-10 rounded-lg border font-medium transition",
-                      nps === n
-                        ? "border-blue-600 bg-blue-600 text-white"
-                        : "border-gray-300 bg-white text-gray-900 hover:border-blue-600"
-                    )}
+            {externalNps?.connected ? (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-amber-200 px-1.5 py-0.5 text-xs font-semibold text-amber-700">SINCRONIZADO</span>
+                    <span className="text-sm text-amber-700">
+                      Datos reales de NPS FisioReferentes{externalNps.clinicName ? ` — ${externalNps.clinicName}` : ""}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-3">
+                    <div className="rounded-lg bg-white p-3">
+                      <p className="text-xs text-gray-500">NPS Score</p>
+                      <p className={cn("text-xl font-bold", externalNps.npsScore !== null && externalNps.npsScore >= 50 ? "text-emerald-600" : externalNps.npsScore !== null && externalNps.npsScore >= 0 ? "text-amber-600" : "text-red-600")}>
+                        {externalNps.npsScore ?? "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-white p-3">
+                      <p className="text-xs text-gray-500">Puntuación media</p>
+                      <p className="text-xl font-bold text-gray-900">{externalNps.avgScore ?? "—"}/10</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-3">
+                      <p className="text-xs text-gray-500">Respuestas (90d)</p>
+                      <p className="text-xl font-bold text-gray-900">{externalNps.total}</p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-amber-600">
+                    Este valor se guarda automáticamente con tus métricas mensuales.
+                  </p>
+                </div>
+                {externalNps.npsAppUrl && (
+                  <a
+                    href={externalNps.npsAppUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700 hover:text-amber-800"
                   >
-                    {n}
-                  </button>
-                ))}
+                    Ver panel NPS completo <ArrowUpRight size={14} />
+                  </a>
+                )}
               </div>
-            </div>
+            ) : (
+              <div>
+                <p className="mb-3 text-sm text-gray-600">
+                  En una escala del 0 al 10, ¿cuán probable es que tus pacientes te recomienden?
+                </p>
+                <div className="flex gap-2">
+                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setNps(n)}
+                      className={cn(
+                        "h-10 w-10 rounded-lg border font-medium transition",
+                        nps === n
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-gray-300 bg-white text-gray-900 hover:border-blue-600"
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-gray-400">
+                  ¿Quieres datos reales? Configura el NPS de FisioReferentes en{" "}
+                  <a href="/alumno/herramientas" className="text-blue-600 underline">Hub de Herramientas</a>.
+                </p>
+              </div>
+            )}
           </Section>
 
           {/* 5. Ocupación */}
