@@ -63,9 +63,9 @@ export async function POST(request: Request) {
     }
 
     // Validate stepNumber if provided
-    if (body.stepNumber && (body.stepNumber < 1 || body.stepNumber > 16)) {
+    if (body.stepNumber != null && (body.stepNumber < 0 || body.stepNumber > 13)) {
       return NextResponse.json(
-        { error: "El paso debe estar entre 1 y 16" },
+        { error: "El paso debe estar entre 0 y 13" },
         { status: 400 }
       );
     }

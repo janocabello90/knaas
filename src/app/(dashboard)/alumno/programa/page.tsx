@@ -48,7 +48,7 @@ export default async function ProgramaPage() {
   const completedSteps = enrollment?.stepProgress.filter(
     (s: StepProgress) => s.status === "COMPLETED"
   ).length ?? 0;
-  const totalSteps = ACTIVA_STEPS.length; // 17 (0-16)
+  const totalSteps = ACTIVA_STEPS.length; // 14 (0-13)
   const progressPct = Math.round((completedSteps / totalSteps) * 100);
 
   const currentStep = enrollment?.stepProgress.find(
@@ -83,8 +83,8 @@ export default async function ProgramaPage() {
   const monthLabels: Record<number, string> = {
     1: "Mes 1 — Diagnóstico, autoconocimiento y claridad estratégica",
     2: "Mes 2 — Propuesta de valor y modelo de negocio",
-    3: "Mes 3 — Control y sistemas mínimos",
-    4: "Mes 4 — Equipo, validación y transición",
+    3: "Mes 3 — Captación, ventas y marca personal",
+    4: "Mes 4 — Graduación y transición",
   };
 
   return (
@@ -101,7 +101,7 @@ export default async function ProgramaPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Mi Programa ACTIVA</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {enrollment?.cohort.name ?? "Sin cohorte asignada"} &middot; 17 pasos (0–16) &middot; 4 meses
+            {enrollment?.cohort.name ?? "Sin cohorte asignada"} &middot; 14 pasos (0–13) &middot; 4 meses
           </p>
         </div>
       </div>
@@ -273,7 +273,7 @@ export default async function ProgramaPage() {
           OPTIMIZA y ESCALA se desbloquean al completar ACTIVA
         </p>
         <p className="mt-1 text-xs text-gray-400">
-          El siguiente paso después de los 17 pasos de ACTIVA
+          El siguiente paso después de los 14 pasos de ACTIVA
         </p>
       </div>
     </div>

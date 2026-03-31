@@ -116,10 +116,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
 
-    // Create 16 StepProgress records (step 1 as AVAILABLE, rest as LOCKED)
-    const stepProgressRecords = Array.from({ length: 16 }, (_, i) => ({
+    // Create 14 StepProgress records (steps 0-13, step 0 as AVAILABLE, rest as LOCKED)
+    const stepProgressRecords = Array.from({ length: 14 }, (_, i) => ({
       enrollmentId: enrollment.id,
-      stepNumber: i + 1,
+      stepNumber: i,
       status: (i === 0 ? 'AVAILABLE' : 'LOCKED') as StepStatus,
     }));
 

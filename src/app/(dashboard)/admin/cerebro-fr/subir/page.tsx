@@ -126,8 +126,8 @@ export default function SubirDocumentoPage() {
         }
 
         const stepNumber = formData.stepNumber ? parseInt(formData.stepNumber, 10) : null;
-        if (stepNumber && (stepNumber < 1 || stepNumber > 16)) {
-          setError("El paso debe estar entre 1 y 16");
+        if (stepNumber != null && (stepNumber < 0 || stepNumber > 13)) {
+          setError("El paso debe estar entre 0 y 13");
           setLoading(false);
           return;
         }
