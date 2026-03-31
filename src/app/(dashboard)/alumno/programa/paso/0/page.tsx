@@ -301,6 +301,10 @@ export default function Paso0Page() {
           content: block.content,
           items: block.items,
           icon: block.icon,
+          videoUrl: (block as Record<string, unknown>).videoUrl as string | undefined,
+          videoProvider: (block as Record<string, unknown>).videoProvider as "youtube" | "loom" | undefined,
+          imageUrl: (block as Record<string, unknown>).imageUrl as string | undefined,
+          imageAlt: (block as Record<string, unknown>).imageAlt as string | undefined,
         }))
       }))
     : SABER_LESSONS;
@@ -360,16 +364,6 @@ export default function Paso0Page() {
         {/* Content */}
         <div className="rounded-xl border border-gray-200 bg-white p-8 space-y-4 mb-6">
           {lesson.sections.map((section: LessonSection, idx: number) => {
-            // NEW: Handle video blocks from database
-            if (section.type === "video" && 'videoUrl' in section) {
-              const videoSection = section as LessonSection & { videoUrl?: string; videoProvider?: string };
-              return (
-                <div key={idx} className="rounded-lg overflow-hidden bg-gray-100 aspect-video">
-                  <RenderVideoBlock url={videoSection.videoUrl || ''} provider={videoSection.videoProvider as "youtube" | "loom" | undefined} />
-                </div>
-              );
-            }
-
             switch (section.type) {
               case "heading":
                 return (
@@ -418,6 +412,29 @@ export default function Paso0Page() {
                     ))}
                   </ul>
                 );
+              case "video": {
+                const vUrl = section.videoUrl || "";
+                let embedUrl = "";
+                if (vUrl.includes("youtube.com") || vUrl.includes("youtu.be")) {
+                  const vid = vUrl.includes("v=") ? vUrl.split("v=")[1]?.split("&")[0] : vUrl.split("youtu.be/")[1]?.split("?")[0];
+                  if (vid) embedUrl = `https://www.youtube.com/embed/${vid}`;
+                } else if (vUrl.includes("loom.com")) {
+                  const lid = vUrl.split("/").pop()?.split("?")[0];
+                  if (lid) embedUrl = `https://www.loom.com/embed/${lid}`;
+                }
+                return embedUrl ? (
+                  <div key={idx} className="rounded-lg overflow-hidden bg-gray-100 aspect-video">
+                    <iframe src={embedUrl} className="w-full h-full" allowFullScreen allow="autoplay; encrypted-media" />
+                  </div>
+                ) : null;
+              }
+              case "image":
+                return section.imageUrl ? (
+                  <figure key={idx} className="my-4">
+                    <img src={section.imageUrl} alt={section.imageAlt || ""} className="w-full rounded-lg" />
+                    {section.imageAlt && <figcaption className="text-xs text-gray-500 mt-2 text-center">{section.imageAlt}</figcaption>}
+                  </figure>
+                ) : null;
               case "separator":
                 return <hr key={idx} className="border-gray-200 my-6" />;
               default:
@@ -1208,50 +1225,3 @@ export default function Paso0Page() {
   );
 }
 
-// ══════════════════════════════════════════════════════════════
-// NEW: Helper component to render videos from database
-// ══════════════════════════════════════════════════════════════
-
-function RenderVideoBlock({
-  url,
-  provider,
-}: {
-  url: string;
-  provider?: "youtube" | "loom";
-}) {
-  if (!url) {
-    return <p className="text-sm text-gray-600 p-4">No hay vídeo para mostrar</p>;
-  }
-
-  let embedUrl = "";
-
-  if (provider === "youtube" || url.includes("youtube.com") || url.includes("youtu.be")) {
-    let videoId = "";
-    if (url.includes("youtube.com")) {
-      videoId = url.split("v=")[1]?.split("&")[0] || "";
-    } else if (url.includes("youtu.be")) {
-      videoId = url.split("youtu.be/")[1]?.split("?")[0] || "";
-    }
-    if (videoId) {
-      embedUrl = `https://www.youtube.com/embed/${videoId}`;
-    }
-  } else if (provider === "loom" || url.includes("loom.com")) {
-    const loomId = url.split("/").pop()?.split("?")[0] || "";
-    if (loomId) {
-      embedUrl = `https://www.loom.com/embed/${loomId}`;
-    }
-  }
-
-  if (!embedUrl) {
-    return <p className="text-sm text-gray-600 p-4">URL de vídeo no válida</p>;
-  }
-
-  return (
-    <iframe
-      src={embedUrl}
-      className="w-full h-full"
-      allowFullScreen
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-    />
-  );
-}

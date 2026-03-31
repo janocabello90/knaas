@@ -1,8 +1,12 @@
 export type LessonSection = {
-  type: "heading" | "paragraph" | "quote" | "callout" | "list" | "warning" | "separator";
+  type: "heading" | "paragraph" | "quote" | "callout" | "list" | "warning" | "video" | "image" | "separator";
   content?: string;
   items?: string[]; // for list type
   icon?: "pin" | "bulb" | "warning" | "flag"; // for callout type
+  videoUrl?: string;
+  videoProvider?: "youtube" | "loom";
+  imageUrl?: string;
+  imageAlt?: string;
 };
 
 export type SaberLesson = {

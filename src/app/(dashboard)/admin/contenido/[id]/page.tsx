@@ -20,9 +20,10 @@ import {
   List as ListIcon,
   AlertCircle as SeparatorIcon,
   ArrowLeft,
+  Image as ImageIcon,
 } from "lucide-react";
 
-type BlockType = "heading" | "paragraph" | "quote" | "callout" | "list" | "warning" | "video" | "separator";
+type BlockType = "heading" | "paragraph" | "quote" | "callout" | "list" | "warning" | "video" | "image" | "separator";
 
 interface Block {
   id: string;
@@ -32,6 +33,8 @@ interface Block {
   icon?: "pin" | "bulb" | "warning" | "flag";
   videoUrl?: string;
   videoProvider?: "youtube" | "loom";
+  imageUrl?: string;
+  imageAlt?: string;
 }
 
 interface Lesson {
@@ -56,6 +59,7 @@ const BLOCK_TYPES: { type: BlockType; label: string; icon: React.ReactNode }[] =
   { type: "list", label: "Lista", icon: <ListIcon className="w-4 h-4" /> },
   { type: "warning", label: "Aviso", icon: <AlertTriangle className="w-4 h-4" /> },
   { type: "video", label: "Vídeo", icon: <VideoIcon className="w-4 h-4" /> },
+  { type: "image", label: "Imagen", icon: <ImageIcon className="w-4 h-4" /> },
   { type: "separator", label: "Separador", icon: <SeparatorIcon className="w-4 h-4" /> },
 ];
 
@@ -441,6 +445,8 @@ function addBlock(
     items: type === "list" ? [""] : undefined,
     icon: type === "callout" ? "bulb" : undefined,
     videoUrl: type === "video" ? "" : undefined,
+    imageUrl: type === "image" ? "" : undefined,
+    imageAlt: type === "image" ? "" : undefined,
   };
 
   const newBlocks = [...lesson.blocks];
@@ -677,6 +683,30 @@ function BlockEditor({
             {block.videoUrl && (
               <div className="bg-gray-100 rounded aspect-video flex items-center justify-center">
                 <VideoPreview url={block.videoUrl} provider={block.videoProvider} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {block.type === "image" && (
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={block.imageUrl || ""}
+              onChange={(e) => onChange({ ...block, imageUrl: e.target.value })}
+              placeholder="Pega la URL de la imagen..."
+              className="w-full px-3 py-2 border border-gray-300 rounded text-sm outline-none"
+            />
+            <input
+              type="text"
+              value={block.imageAlt || ""}
+              onChange={(e) => onChange({ ...block, imageAlt: e.target.value })}
+              placeholder="Texto alternativo / pie de foto (opcional)"
+              className="w-full px-3 py-2 border border-gray-300 rounded text-sm outline-none"
+            />
+            {block.imageUrl && (
+              <div className="bg-gray-100 rounded overflow-hidden">
+                <img src={block.imageUrl} alt={block.imageAlt || ""} className="w-full max-h-96 object-contain" />
               </div>
             )}
           </div>

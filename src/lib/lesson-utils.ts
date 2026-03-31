@@ -1,6 +1,6 @@
 // Shared utilities for lesson rendering across the platform
 
-export type BlockType = "heading" | "paragraph" | "quote" | "callout" | "list" | "warning" | "video" | "separator";
+export type BlockType = "heading" | "paragraph" | "quote" | "callout" | "list" | "warning" | "video" | "image" | "separator";
 
 export interface Block {
   id: string;
@@ -10,6 +10,8 @@ export interface Block {
   icon?: "pin" | "bulb" | "warning" | "flag";
   videoUrl?: string;
   videoProvider?: "youtube" | "loom";
+  imageUrl?: string;
+  imageAlt?: string;
 }
 
 export interface DatabaseLesson {
